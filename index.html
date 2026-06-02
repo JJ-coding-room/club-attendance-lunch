@@ -31,6 +31,9 @@
             border: none; padding: 8px 15px; border-radius: 4px;
             cursor: pointer; font-weight: bold; font-size: 0.9rem;
         }
+        .reset-btn {
+            background-color: #d32f2f; color: white;
+        }
 
         /* 메인 컨테이너 */
         .container { max-width: 1000px; margin: 20px auto; padding: 0 15px; }
@@ -118,6 +121,7 @@
     <header>
         <h1>주거복지학술 동아리 점심반 (12:00~13:00)</h1>
         <div class="header-btns">
+            <button class="header-btn reset-btn" onclick="clearCorruptedData()">데이터 초기화</button>
             <button class="header-btn" onclick="sharePage()">공유</button>
         </div>
     </header>
@@ -207,7 +211,7 @@
     </div>
 
     <script>
-        // 초기 기본값 데이터 구조
+        // 안전 장치 백업용 기본 데이터 구조
         let members = ['홍길동', '김철수', '이영희']; 
         let attendanceData = {}; 
         let currentSelectedMonth = 5;
@@ -222,11 +226,15 @@
             renderCalendar();
         };
 
+        // 🛠️ 철벽 방어 보완: 가져온 데이터가 완벽한 객체/배열 구조인지 철저히 검증
         function loadAllData() {
             try {
                 const savedMembers = localStorage.getItem('clubMembers');
-                if (savedMembers !== null) {
-                    members = JSON.parse(savedMembers);
+                if (savedMembers) {
+                    const parsedMembers = JSON.parse(savedMembers);
+                    if (Array.isArray(parsedMembers)) {
+                        members = parsedMembers;
+                    }
                 }
             } catch (e) {
                 members = ['홍길동', '김철수', '이영희'];
@@ -234,8 +242,14 @@
 
             try {
                 const savedAttendance = localStorage.getItem('clubAttendanceData');
-                if (savedAttendance !== null) {
-                    attendanceData = JSON.parse(savedAttendance);
+                if (savedAttendance) {
+                    const parsedAttendance = JSON.parse(savedAttendance);
+                    // 객체 형태가 맞는지 체크 (배열이 아니어야 함)
+                    if (parsedAttendance && typeof parsedAttendance === 'object' && !Array.isArray(parsedAttendance)) {
+                        attendanceData = parsedAttendance;
+                    } else {
+                        attendanceData = {};
+                    }
                 } else {
                     attendanceData = {};
                 }
@@ -249,6 +263,22 @@
                 localStorage.setItem('clubMembers', JSON.stringify(members));
                 localStorage.setItem('clubAttendanceData', JSON.stringify(attendanceData));
             } catch (e) {}
+        }
+
+        // 🛠️ 추가된 비상 탈출구: 꼬인 구버전 브라우저 데이터를 강제로 비워주는 함수
+        function clearCorruptedData() {
+            if (confirm("충돌을 일으키는 브라우저 내부의 이전 테스트 데이터를 초기화하시겠습니까?\n(초기화 후 화면이 정상적으로 열립니다)")) {
+                try {
+                    localStorage.removeItem('clubMembers');
+                    localStorage.removeItem('clubAttendanceData');
+                    localStorage.removeItem('clubDefaultMonthMode');
+                    localStorage.removeItem('clubDefaultFixedMonth');
+                    alert("초기화되었습니다. 페이지를 다시 시작합니다.");
+                    location.reload();
+                } catch(e) {
+                    alert("초기화 중 오류가 발생했습니다.");
+                }
+            }
         }
 
         function initializeMonthSettings() {
@@ -269,7 +299,8 @@
             } catch(e) {
                 currentSelectedMonth = 5;
             }
-            document.getElementById('monthSelector').value = currentSelectedMonth;
+            const selector = document.getElementById('monthSelector');
+            if(selector) selector.value = currentSelectedMonth;
             updateDashboardTitles();
         }
 
@@ -280,21 +311,25 @@
                 
                 document.querySelector(`input[name="defaultMode"][value="${savedMode}"]`).checked = true;
                 document.getElementById('fixedMonthSelect').value = savedFixedMonth;
-            } catch(e) {
-                document.querySelector(`input[name="defaultMode"][value="auto"]`).checked = true;
-            }
+            } catch(e) {}
             
             toggleFixedMonthSelect();
             document.getElementById('settingsModal').style.display = 'flex';
         }
 
         function toggleFixedMonthSelect() {
-            const isFixed = document.querySelector('input[name="defaultMode"][value="fixed"]').checked;
-            document.getElementById('fixedMonthSelect').style.display = isFixed ? 'inline-block' : 'none';
+            const radio = document.querySelector('input[name="defaultMode"][value="fixed"]');
+            if(radio) {
+                const isFixed = radio.checked;
+                document.getElementById('fixedMonthSelect').style.display = isFixed ? 'inline-block' : 'none';
+            }
         }
 
         function saveSettings() {
-            const selectedMode = document.querySelector('input[name="defaultMode"]:checked').value;
+            const checkedMode = document.querySelector('input[name="defaultMode"]:checked');
+            if(!checkedMode) return;
+            
+            const selectedMode = checkedMode.value;
             const selectedFixedMonth = document.getElementById('fixedMonthSelect').value;
 
             try {
@@ -312,6 +347,7 @@
 
         function renderMembers() {
             const listArea = document.getElementById('memberListArea');
+            if(!listArea) return;
             listArea.innerHTML = '';
             if(!Array.isArray(members)) { members = []; }
             
@@ -330,6 +366,7 @@
 
         function addMember() {
             const input = document.getElementById('newMemberName');
+            if(!input) return;
             const name = input.value.trim();
             if (name && !members.includes(name)) {
                 members.push(name);
@@ -376,33 +413,40 @@
         }
 
         function changeMonth() {
-            currentSelectedMonth = parseInt(document.getElementById('monthSelector').value);
+            const selector = document.getElementById('monthSelector');
+            if(selector) currentSelectedMonth = parseInt(selector.value);
             updateDashboardTitles();
             renderCalendar();
         }
 
         function updateDashboardTitles() {
-            document.getElementById('dashTitle1').innerText = `${currentSelectedMonth}월 활동 횟수`;
-            document.getElementById('dashTitle2').innerText = `${currentSelectedMonth}월 참여 인원`;
+            const t1 = document.getElementById('dashTitle1');
+            const t2 = document.getElementById('dashTitle2');
+            if(t1) t1.innerText = `${currentSelectedMonth}월 활동 횟수`;
+            if(t2) t2.innerText = `${currentSelectedMonth}월 참여 인원`;
         }
 
-        // 💡 수정된 부분: 캘린더 박스에 숫자 대신 '참여자 이름 목록'을 띄워주는 로직 반영
         function renderCalendar() {
             const calendarGrid = document.getElementById('calendarGrid');
+            if(!calendarGrid) return;
             calendarGrid.innerHTML = '';
-            const maxDays = daysInMonth[currentSelectedMonth];
+            const maxDays = daysInMonth[currentSelectedMonth] || 31;
 
             for (let i = 1; i <= maxDays; i++) {
                 const dateKey = `${currentSelectedMonth}-${i}`;
-                const presentMembers = attendanceData[dateKey] || [];
-                const dayBox = document.createElement('div');
                 
-                const actualPresent = presentMembers.filter(p => members.includes(p));
+                // 🛠️ 철벽 방어 보완: 하루치 출석 데이터가 배열이 아닐 경우 예외 처리
+                let presentMembers = attendanceData[dateKey];
+                if(!Array.isArray(presentMembers)) {
+                    presentMembers = [];
+                }
+                
+                const dayBox = document.createElement('div');
+                const actualPresent = presentMembers.filter(p => typeof p === 'string' && members.includes(p));
                 
                 dayBox.className = `day-box ${actualPresent.length > 0 ? 'active' : ''}`;
                 dayBox.id = `day-${i}`;
                 
-                // 변경점: actualPresent.length + "명 참여" 대신 actualPresent.join(', ') 적용
                 const statusText = actualPresent.length > 0 ? actualPresent.join(', ') : '미입력';
                 const statusColor = actualPresent.length > 0 ? 'var(--primary-blue)' : '#888';
 
@@ -422,8 +466,11 @@
             document.getElementById('modalDateTitle').innerText = `${currentSelectedMonth}월 ${day}일 활동 입력`;
             
             const checkboxContainer = document.getElementById('memberCheckboxes');
+            if(!checkboxContainer) return;
             checkboxContainer.innerHTML = '';
-            const todaysAttendance = attendanceData[dateKey] || [];
+            
+            let todaysAttendance = attendanceData[dateKey];
+            if(!Array.isArray(todaysAttendance)) { todaysAttendance = []; }
 
             if (members.length === 0) {
                 checkboxContainer.innerHTML = '<p style="color:#888; font-size:0.9rem;">등록된 참여자가 없습니다.</p>';
@@ -439,7 +486,8 @@
         }
 
         function closeModal(modalId) {
-            document.getElementById(modalId).style.display = 'none';
+            const modal = document.getElementById(modalId);
+            if(modal) modal.style.display = 'none';
         }
 
         function saveAttendance() {
@@ -456,17 +504,22 @@
             let activeDaysCount = 0;
             let uniqueMembers = new Set();
 
-            for (const [dateKey, participants] of Object.entries(attendanceData)) {
-                if (dateKey.startsWith(`${currentSelectedMonth}-`) && Array.isArray(participants) && participants.length > 0) {
-                    const validParticipants = participants.filter(p => members.includes(p));
-                    if(validParticipants.length > 0) {
-                        activeDaysCount++;
-                        validParticipants.forEach(p => uniqueMembers.add(p));
+            if (attendanceData && typeof attendanceData === 'object') {
+                for (const [dateKey, participants] of Object.entries(attendanceData)) {
+                    if (dateKey.startsWith(`${currentSelectedMonth}-`) && Array.isArray(participants) && participants.length > 0) {
+                        const validParticipants = participants.filter(p => typeof p === 'string' && members.includes(p));
+                        if(validParticipants.length > 0) {
+                            activeDaysCount++;
+                            validParticipants.forEach(p => uniqueMembers.add(p));
+                        }
                     }
                 }
             }
-            document.getElementById('activityCount').innerText = `${activeDaysCount}회`;
-            document.getElementById('uniqueMembersCount').innerText = `${uniqueMembers.size}명`;
+            
+            const c1 = document.getElementById('activityCount');
+            const c2 = document.getElementById('uniqueMembersCount');
+            if(c1) c1.innerText = `${activeDaysCount}회`;
+            if(c2) c2.innerText = `${uniqueMembers.size}명`;
         }
 
         function sharePage() {

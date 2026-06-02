@@ -10,10 +10,18 @@
             --light-bg: #f4f7fa;
             --border-color: #e0e5eb;
             --text-main: #333;
+            --share-green: #2e7d32;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Malgun Gothic', sans-serif; }
         body { background-color: var(--light-bg); color: var(--text-main); }
         
+        /* 읽기 전용 안내 배너 스타일 */
+        .readonly-banner {
+            display: none; background-color: #fff3cd; color: #856404;
+            text-align: center; padding: 10px; font-weight: bold;
+            border-bottom: 1px solid #ffeeba; font-size: 0.95rem;
+        }
+
         /* 헤더 영역 */
         header {
             background-color: var(--primary-blue);
@@ -25,15 +33,17 @@
             flex-wrap: wrap;
         }
         header h1 { font-size: 1.2rem; margin-bottom: 5px; }
-        .header-btns { display: flex; gap: 10px; }
+        .header-btns { display: flex; gap: 10px; flex-wrap: wrap; }
         .header-btn {
             background-color: white; color: var(--primary-blue);
             border: none; padding: 8px 15px; border-radius: 4px;
             cursor: pointer; font-weight: bold; font-size: 0.9rem;
         }
-        .reset-btn {
-            background-color: #d32f2f; color: white;
+        /* 읽기전용 링크 생성 버튼 디자인 */
+        .header-btn.btn-share-view {
+            background-color: var(--share-green); color: white;
         }
+        .reset-btn { background-color: #d32f2f; color: white; }
 
         /* 메인 컨테이너 */
         .container { max-width: 1000px; margin: 20px auto; padding: 0 15px; }
@@ -118,10 +128,15 @@
 </head>
 <body>
 
+    <div class="readonly-banner" id="readonlyBanner">
+        🔒 현재 화면은 공유된 [읽기 전용] 출석 현황판입니다. 내용 수정 및 참여자 변경이 불가능합니다.
+    </div>
+
     <header>
         <h1>주거복지학술 동아리 점심반 (12:00~13:00)</h1>
         <div class="header-btns">
-            <button class="header-btn reset-btn" onclick="clearCorruptedData()">데이터 초기화</button>
+            <button class="header-btn btn-share-view" id="shareViewBtn" onclick="generateReadOnlyLink()">출석 현황 링크 생성 (읽기전용)</button>
+            <button class="header-btn reset-btn" id="resetDataBtn" onclick="clearCorruptedData()">데이터 초기화</button>
             <button class="header-btn" onclick="sharePage()">공유</button>
         </div>
     </header>
@@ -138,8 +153,8 @@
             </div>
         </section>
 
-        <section class="member-mgmt">
-            <div class="member-input-area">
+        <section class="member-mgmt" id="memberMgmtSection">
+            <div class="member-input-area" id="memberInputArea">
                 <input type="text" id="newMemberName" placeholder="새로운 참여자 이름 입력" onkeypress="if(event.key==='Enter') addMember()">
                 <button onclick="addMember()">참여자 추가</button>
             </div>
@@ -160,7 +175,7 @@
                         <option value="12">2026년 12월</option>
                     </select>
                 </div>
-                <button class="setting-btn" onclick="openSettingsModal()">⚙️ 기본월 설정</button>
+                <button class="setting-btn" id="settingBtn" onclick="openSettingsModal()">⚙️ 기본월 설정</button>
             </div>
             <div class="calendar-grid" id="calendarGrid"></div>
         </section>
@@ -169,15 +184,15 @@
     <div class="modal-overlay" id="dayModal">
         <div class="modal-content">
             <h2 id="modalDateTitle">0월 0일 활동</h2>
-            <div class="photo-upload">
+            <div class="photo-upload" id="photoUploadArea">
                 <label><strong>모임 사진 첨부 (1~2장)</strong></label>
                 <input type="file" multiple accept="image/*" style="margin-top: 5px; width: 100%;">
             </div>
             <div><strong>참여자 체크</strong></div>
             <div class="checkbox-group" id="memberCheckboxes"></div>
             <div class="modal-btns">
-                <button class="btn-close" onclick="closeModal('dayModal')">취소</button>
-                <button class="btn-save" onclick="saveAttendance()">저장</button>
+                <button class="btn-close" id="modalCancelBtn" onclick="closeModal('dayModal')">취소</button>
+                <button class="btn-save" id="modalSaveBtn" onclick="saveAttendance()">저장</button>
             </div>
         </div>
     </div>
@@ -211,47 +226,86 @@
     </div>
 
     <script>
-        // 안전 장치 백업용 기본 데이터 구조
         let members = ['홍길동', '김철수', '이영희']; 
         let attendanceData = {}; 
         let currentSelectedMonth = 5;
         let currentSelectedDay = null;
+        let isReadOnly = false; // 💡 읽기 전용 상태 파악용 변수 추가
 
         const daysInMonth = { 5: 31, 6: 30, 7: 31, 8: 31, 9: 30, 10: 31, 11: 30, 12: 31 };
 
         window.onload = function() {
-            loadAllData(); 
+            checkReadOnlyMode(); // 💡 공유받은 링크인지 먼저 검사
             initializeMonthSettings(); 
             renderMembers();
             renderCalendar();
         };
 
-        // 🛠️ 철벽 방어 보완: 가져온 데이터가 완벽한 객체/배열 구조인지 철저히 검증
+        // 🛠️ 읽기 전용 모드 검사 및 UI 잠금 장치 실행
+        function checkReadOnlyMode() {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has('snapshot')) {
+                // 주소 뒤에 snapshot 데이터가 붙어 접속한 경우
+                isReadOnly = true;
+                document.getElementById('readonlyBanner').style.display = 'block'; // 안내 배너 켜기
+                document.getElementById('shareViewBtn').style.display = 'none';    // 생성 버튼 끄기
+                document.getElementById('resetDataBtn').style.display = 'none';    // 초기화 버튼 끄기
+                document.getElementById('settingBtn').style.display = 'none';      // 기본월 설정 끄기
+                document.getElementById('memberInputArea').style.display = 'none'; // 참여자 입력칸 끄기
+
+                try {
+                    // 주소창의 압축 텍스트를 해독하여 복구
+                    const decodedData = JSON.parse(decodeURIComponent(atob(urlParams.get('snapshot'))));
+                    members = decodedData.m || [];
+                    attendanceData = decodedData.a || {};
+                    if(decodedData.mon) { currentSelectedMonth = decodedData.mon; }
+                } catch (e) {
+                    alert("공유 링크의 데이터가 손상되었거나 올바르지 않습니다.");
+                    loadAllData();
+                    isReadOnly = false;
+                    document.getElementById('readonlyBanner').style.display = 'none';
+                }
+            } else {
+                // 일반 접속인 경우 로컬 브라우저 데이터 로드
+                loadAllData();
+            }
+        }
+
+        // 🛠️ 대망의 기능: 현재 데이터를 통째로 압축해 주소창 전용 링크로 복사해주는 함수
+        function generateReadOnlyLink() {
+            try {
+                const snapshot = {
+                    m: members,
+                    a: attendanceData,
+                    mon: currentSelectedMonth
+                };
+                // 한글 깨짐 방지 결합형 Base64 압축 기술 적용
+                const compressedText = btoa(encodeURIComponent(JSON.stringify(snapshot)));
+                
+                // 최종 공유용 주소 완성
+                const readOnlyUrl = window.location.origin + window.location.pathname + '?snapshot=' + compressedText;
+                
+                // 클립보드 복사
+                navigator.clipboard.writeText(readOnlyUrl);
+                alert("📋 현재 출석부 상태가 담긴 [읽기 전용] 링크가 복사되었습니다!\n\n이 링크를 동아리방에 공유하면, 다른 사람들은 내가 입력해 둔 명단과 출석 기록(이름 노출 상태)을 그대로 깨끗하게 볼 수 있습니다.\n(링크를 받은 사람들은 수정이 불가능하므로 안심하셔도 됩니다)");
+            } catch (e) {
+                alert("공유 링크를 생성하는 중 에러가 발생했습니다.");
+            }
+        }
+
         function loadAllData() {
             try {
                 const savedMembers = localStorage.getItem('clubMembers');
                 if (savedMembers) {
                     const parsedMembers = JSON.parse(savedMembers);
-                    if (Array.isArray(parsedMembers)) {
-                        members = parsedMembers;
-                    }
+                    if (Array.isArray(parsedMembers)) { members = parsedMembers; }
                 }
-            } catch (e) {
-                members = ['홍길동', '김철수', '이영희'];
-            }
-
-            try {
                 const savedAttendance = localStorage.getItem('clubAttendanceData');
                 if (savedAttendance) {
                     const parsedAttendance = JSON.parse(savedAttendance);
-                    // 객체 형태가 맞는지 체크 (배열이 아니어야 함)
                     if (parsedAttendance && typeof parsedAttendance === 'object' && !Array.isArray(parsedAttendance)) {
                         attendanceData = parsedAttendance;
-                    } else {
-                        attendanceData = {};
                     }
-                } else {
-                    attendanceData = {};
                 }
             } catch (e) {
                 attendanceData = {};
@@ -259,22 +313,19 @@
         }
 
         function saveAllData() {
+            if (isReadOnly) return; // 읽기 전용 모드일 때는 내 브라우저에 저장하지 않음
             try {
                 localStorage.setItem('clubMembers', JSON.stringify(members));
                 localStorage.setItem('clubAttendanceData', JSON.stringify(attendanceData));
             } catch (e) {}
         }
 
-        // 🛠️ 추가된 비상 탈출구: 꼬인 구버전 브라우저 데이터를 강제로 비워주는 함수
         function clearCorruptedData() {
-            if (confirm("충돌을 일으키는 브라우저 내부의 이전 테스트 데이터를 초기화하시겠습니까?\n(초기화 후 화면이 정상적으로 열립니다)")) {
+            if (confirm("브라우저 내부의 모든 동아리 데이터를 초기화하시겠습니까?")) {
                 try {
-                    localStorage.removeItem('clubMembers');
-                    localStorage.removeItem('clubAttendanceData');
-                    localStorage.removeItem('clubDefaultMonthMode');
-                    localStorage.removeItem('clubDefaultFixedMonth');
+                    localStorage.clear();
                     alert("초기화되었습니다. 페이지를 다시 시작합니다.");
-                    location.reload();
+                    location.href = window.location.origin + window.location.pathname; // 순수 주소로 리다이렉트
                 } catch(e) {
                     alert("초기화 중 오류가 발생했습니다.");
                 }
@@ -282,6 +333,11 @@
         }
 
         function initializeMonthSettings() {
+            if (isReadOnly) {
+                document.getElementById('monthSelector').value = currentSelectedMonth;
+                updateDashboardTitles();
+                return;
+            }
             try {
                 let savedMode = localStorage.getItem('clubDefaultMonthMode') || 'auto';
                 let savedFixedMonth = localStorage.getItem('clubDefaultFixedMonth') || '5';
@@ -305,14 +361,13 @@
         }
 
         function openSettingsModal() {
+            if (isReadOnly) return;
             try {
                 let savedMode = localStorage.getItem('clubDefaultMonthMode') || 'auto';
                 let savedFixedMonth = localStorage.getItem('clubDefaultFixedMonth') || '5';
-                
                 document.querySelector(`input[name="defaultMode"][value="${savedMode}"]`).checked = true;
                 document.getElementById('fixedMonthSelect').value = savedFixedMonth;
             } catch(e) {}
-            
             toggleFixedMonthSelect();
             document.getElementById('settingsModal').style.display = 'flex';
         }
@@ -328,17 +383,14 @@
         function saveSettings() {
             const checkedMode = document.querySelector('input[name="defaultMode"]:checked');
             if(!checkedMode) return;
-            
             const selectedMode = checkedMode.value;
             const selectedFixedMonth = document.getElementById('fixedMonthSelect').value;
-
             try {
                 localStorage.setItem('clubDefaultMonthMode', selectedMode);
                 if (selectedMode === 'fixed') {
                     localStorage.setItem('clubDefaultFixedMonth', selectedFixedMonth);
                 }
             } catch(e) {}
-
             alert('기본월 설정이 저장되었습니다.');
             initializeMonthSettings();
             renderCalendar();
@@ -352,19 +404,19 @@
             if(!Array.isArray(members)) { members = []; }
             
             members.forEach((member, index) => {
+                // 💡 읽기 전용 상태일 때는 수정/삭제 버튼을 문자열에서 배제
+                const actionButtons = isReadOnly ? '' : `<div><button class="btn-edit" onclick="editMember(${index})">수정</button> | <button class="btn-delete" onclick="deleteMember(${index})">삭제</button></div>`;
                 listArea.innerHTML += `
                     <div class="member-tag">
                         <span>${member}</span>
-                        <div>
-                            <button class="btn-edit" onclick="editMember(${index})">수정</button> |
-                            <button class="btn-delete" onclick="deleteMember(${index})">삭제</button>
-                        </div>
+                        ${actionButtons}
                     </div>
                 `;
             });
         }
 
         function addMember() {
+            if (isReadOnly) return;
             const input = document.getElementById('newMemberName');
             if(!input) return;
             const name = input.value.trim();
@@ -382,6 +434,7 @@
         }
 
         function editMember(index) {
+            if (isReadOnly) return;
             const oldName = members[index];
             const newName = prompt("수정할 이름을 입력하세요:", oldName);
             if (newName && newName.trim() !== "" && newName !== oldName) {
@@ -404,6 +457,7 @@
         }
 
         function deleteMember(index) {
+            if (isReadOnly) return;
             if(confirm(`'${members[index]}'님을 삭제하시겠습니까?`)) {
                 members.splice(index, 1);
                 saveAllData(); 
@@ -434,12 +488,8 @@
 
             for (let i = 1; i <= maxDays; i++) {
                 const dateKey = `${currentSelectedMonth}-${i}`;
-                
-                // 🛠️ 철벽 방어 보완: 하루치 출석 데이터가 배열이 아닐 경우 예외 처리
                 let presentMembers = attendanceData[dateKey];
-                if(!Array.isArray(presentMembers)) {
-                    presentMembers = [];
-                }
+                if(!Array.isArray(presentMembers)) { presentMembers = []; }
                 
                 const dayBox = document.createElement('div');
                 const actualPresent = presentMembers.filter(p => typeof p === 'string' && members.includes(p));
@@ -463,7 +513,7 @@
         function openModal(day) {
             currentSelectedDay = day;
             const dateKey = `${currentSelectedMonth}-${day}`;
-            document.getElementById('modalDateTitle').innerText = `${currentSelectedMonth}월 ${day}일 활동 입력`;
+            document.getElementById('modalDateTitle').innerText = `${currentSelectedMonth}월 ${day}일 활동 내용`;
             
             const checkboxContainer = document.getElementById('memberCheckboxes');
             if(!checkboxContainer) return;
@@ -477,11 +527,25 @@
             } else {
                 members.forEach(member => {
                     const isChecked = todaysAttendance.includes(member) ? 'checked' : '';
+                    // 💡 읽기 전용 상태일 때는 체크박스를 강제로 비활성화(disabled) 처리
+                    const isDisabled = isReadOnly ? 'disabled' : '';
                     checkboxContainer.innerHTML += `
-                        <label><input type="checkbox" value="${member}" class="att-check" ${isChecked}> ${member}</label>
+                        <label><input type="checkbox" value="${member}" class="att-check" ${isChecked} ${isDisabled}> ${member}</label>
                     `;
                 });
             }
+
+            // 💡 읽기 전용일 때는 하단 버튼 구조 및 사진 첨부창 변경 제어
+            if (isReadOnly) {
+                document.getElementById('photoUploadArea').style.display = 'none'; // 사진 선택창 감추기
+                document.getElementById('modalSaveBtn').style.display = 'none';    // 저장 버튼 감추기
+                document.getElementById('modalCancelBtn').innerText = '닫기';      // 취소 ➔ 닫기 변경
+            } else {
+                document.getElementById('photoUploadArea').style.display = 'block';
+                document.getElementById('modalSaveBtn').style.display = 'inline-block';
+                document.getElementById('modalCancelBtn').innerText = '취소';
+            }
+
             document.getElementById('dayModal').style.display = 'flex';
         }
 
@@ -491,6 +555,7 @@
         }
 
         function saveAttendance() {
+            if (isReadOnly) return;
             const dateKey = `${currentSelectedMonth}-${currentSelectedDay}`;
             const presentMembers = Array.from(document.querySelectorAll('.att-check:checked')).map(cb => cb.value);
             attendanceData[dateKey] = presentMembers;

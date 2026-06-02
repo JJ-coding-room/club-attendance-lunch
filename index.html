@@ -207,7 +207,7 @@
     </div>
 
     <script>
-        // 초기 설정 및 데이터 구조
+        // 초기 예비용 기본 데이터 구조 정의
         let members = ['홍길동', '김철수', '이영희']; 
         let attendanceData = {}; 
         let currentSelectedMonth = 5;
@@ -215,28 +215,41 @@
 
         const daysInMonth = { 5: 31, 6: 30, 7: 31, 8: 31, 9: 30, 10: 31, 11: 30, 12: 31 };
 
-        // 초기화 실행 (가장 먼저 기존 데이터를 브라우저에서 읽어옴)
+        // 초기화 실행
         window.onload = function() {
-            loadAllData(); // 💡 추가됨: 저장된 데이터 불러오기
+            loadAllData(); // 안전장치가 추가된 데이터 로드 실행
             initializeMonthSettings(); 
             renderMembers();
             renderCalendar();
         };
 
-        // 💡 추가됨: 브라우저 저장소(LocalStorage)에서 데이터 로드하는 함수
+        // 🛠️ 대폭 수정: 브라우저 저장 데이터 복구 로직 최적화 (안전장치 추가)
         function loadAllData() {
-            const savedMembers = localStorage.getItem('clubMembers');
-            const savedAttendance = localStorage.getItem('clubAttendanceData');
-            
-            if (savedMembers) {
-                members = JSON.parse(savedMembers);
-            }
-            if (savedAttendance) {
-                attendanceData = JSON.parse(savedAttendance);
+            try {
+                const savedMembers = localStorage.getItem('clubMembers');
+                const savedAttendance = localStorage.getItem('clubAttendanceData');
+                
+                // 브라우저에 저장된 멤버 정보가 유효할 때만 변수 교체, 없으면 기본값 유지
+                if (savedMembers && savedMembers !== "[]") {
+                    members = JSON.parse(savedMembers);
+                } else {
+                    // 처음 방문했거나 멤버가 텅 빈 경우 초기 기본값 설정 후 즉시 저장
+                    saveAllData();
+                }
+
+                // 저장된 출석 데이터가 유효할 때만 적용, 없으면 빈 객체 유지
+                if (savedAttendance) {
+                    attendanceData = JSON.parse(savedAttendance);
+                } else {
+                    attendanceData = {};
+                }
+            } catch (e) {
+                console.error("데이터 로딩 중 에러 발생, 초기값으로 리셋합니다.", e);
+                attendanceData = {};
             }
         }
 
-        // 💡 추가됨: 데이터가 변경될 때마다 브라우저 저장소에 기록하는 함수
+        // 데이터 통합 저장 함수
         function saveAllData() {
             localStorage.setItem('clubMembers', JSON.stringify(members));
             localStorage.setItem('clubAttendanceData', JSON.stringify(attendanceData));
@@ -315,7 +328,7 @@
             const name = input.value.trim();
             if (name && !members.includes(name)) {
                 members.push(name);
-                saveAllData(); // 💡 데이터 저장
+                saveAllData(); 
                 renderMembers();
                 input.value = '';
             } else if (members.includes(name)) {
@@ -327,128 +340,4 @@
             const oldName = members[index];
             const newName = prompt("수정할 이름을 입력하세요:", oldName);
             if (newName && newName.trim() !== "" && newName !== oldName) {
-                if(members.includes(newName.trim())) {
-                    alert('이미 존재하는 이름입니다.');
-                    return;
-                }
-                for (let dateKey in attendanceData) {
-                    let attList = attendanceData[dateKey];
-                    let nameIdx = attList.indexOf(oldName);
-                    if (nameIdx > -1) attList[nameIdx] = newName.trim();
-                }
-                members[index] = newName.trim();
-                saveAllData(); // 💡 데이터 저장
-                renderMembers();
-                updateDashboard();
-            }
-        }
-
-        function deleteMember(index) {
-            if(confirm(`'${members[index]}'님을 삭제하시겠습니까?`)) {
-                members.splice(index, 1);
-                saveAllData(); // 💡 데이터 저장
-                renderMembers();
-            }
-        }
-
-        /* ---------------- 캘린더 및 대시보드 기능 ---------------- */
-        function changeMonth() {
-            currentSelectedMonth = parseInt(document.getElementById('monthSelector').value);
-            updateDashboardTitles();
-            renderCalendar();
-        }
-
-        function updateDashboardTitles() {
-            document.getElementById('dashTitle1').innerText = `${currentSelectedMonth}월 활동 횟수`;
-            document.getElementById('dashTitle2').innerText = `${currentSelectedMonth}월 참여 인원`;
-        }
-
-        function renderCalendar() {
-            const calendarGrid = document.getElementById('calendarGrid');
-            calendarGrid.innerHTML = '';
-            const maxDays = daysInMonth[currentSelectedMonth];
-
-            for (let i = 1; i <= maxDays; i++) {
-                const dateKey = `${currentSelectedMonth}-${i}`;
-                const presentMembers = attendanceData[dateKey] || [];
-                const dayBox = document.createElement('div');
-                
-                dayBox.className = `day-box ${presentMembers.length > 0 ? 'active' : ''}`;
-                dayBox.id = `day-${i}`;
-                
-                const statusText = presentMembers.length > 0 ? `${presentMembers.length}명 참여` : '미입력';
-                const statusColor = presentMembers.length > 0 ? 'var(--primary-blue)' : '#888';
-
-                dayBox.innerHTML = `
-                    <div class="date">${i}일</div>
-                    <div class="status" style="font-size:0.8em; color:${statusColor};">${statusText}</div>
-                `;
-                dayBox.onclick = () => openModal(i);
-                calendarGrid.appendChild(dayBox);
-            }
-            updateDashboard();
-        }
-
-        /* ---------------- 모달(팝업) 기능 ---------------- */
-        function openModal(day) {
-            currentSelectedDay = day;
-            const dateKey = `${currentSelectedMonth}-${day}`;
-            document.getElementById('modalDateTitle').innerText = `${currentSelectedMonth}월 ${day}일 활동 입력`;
-            
-            const checkboxContainer = document.getElementById('memberCheckboxes');
-            checkboxContainer.innerHTML = '';
-            const todaysAttendance = attendanceData[dateKey] || [];
-
-            if (members.length === 0) {
-                checkboxContainer.innerHTML = '<p style="color:#888; font-size:0.9rem;">등록된 참여자가 없습니다.</p>';
-            } else {
-                members.forEach(member => {
-                    const isChecked = todaysAttendance.includes(member) ? 'checked' : '';
-                    checkboxContainer.innerHTML += `
-                        <label><input type="checkbox" value="${member}" class="att-check" ${isChecked}> ${member}</label>
-                    `;
-                });
-            }
-            document.getElementById('dayModal').style.display = 'flex';
-        }
-
-        function closeModal(modalId) {
-            document.getElementById(modalId).style.display = 'none';
-        }
-
-        function saveAttendance() {
-            const dateKey = `${currentSelectedMonth}-${currentSelectedDay}`;
-            const presentMembers = Array.from(document.querySelectorAll('.att-check:checked')).map(cb => cb.value);
-            attendanceData[dateKey] = presentMembers;
-            
-            saveAllData(); // 💡 출석체크 정보 브라우저에 즉시 저장
-            renderCalendar(); 
-            closeModal('dayModal');
-        }
-
-        function updateDashboard() {
-            let activeDaysCount = 0;
-            let uniqueMembers = new Set();
-
-            for (const [dateKey, participants] of Object.entries(attendanceData)) {
-                if (dateKey.startsWith(`${currentSelectedMonth}-`) && participants.length > 0) {
-                    activeDaysCount++;
-                    participants.forEach(p => uniqueMembers.add(p));
-                }
-            }
-            document.getElementById('activityCount').innerText = `${activeDaysCount}회`;
-            document.getElementById('uniqueMembersCount').innerText = `${uniqueMembers.size}명`;
-        }
-
-        // 공유 기능
-        function sharePage() {
-            if (navigator.share) {
-                navigator.share({ title: '주거복지학술 동아리 점심반', url: window.location.href }).catch(console.error);
-            } else {
-                alert('주소가 클립보드에 복사되었습니다.');
-                navigator.clipboard.writeText(window.location.href);
-            }
-        }
-    </script>
-</body>
-</html>
+                if(members.

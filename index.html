@@ -123,7 +123,6 @@
     </header>
 
     <div class="container">
-        <!-- 상단 대시보드 -->
         <section class="dashboard">
             <div class="dash-card">
                 <h3 id="dashTitle1">이번 달 활동 횟수</h3>
@@ -135,7 +134,6 @@
             </div>
         </section>
 
-        <!-- 참여자 관리 -->
         <section class="member-mgmt">
             <div class="member-input-area">
                 <input type="text" id="newMemberName" placeholder="새로운 참여자 이름 입력" onkeypress="if(event.key==='Enter') addMember()">
@@ -144,7 +142,6 @@
             <div class="member-list" id="memberListArea"></div>
         </section>
 
-        <!-- 캘린더 인터페이스 -->
         <section class="calendar-section">
             <div class="calendar-header">
                 <div>
@@ -165,7 +162,6 @@
         </section>
     </div>
 
-    <!-- 일별 정보 입력 팝업(모달) -->
     <div class="modal-overlay" id="dayModal">
         <div class="modal-content">
             <h2 id="modalDateTitle">0월 0일 활동</h2>
@@ -182,7 +178,6 @@
         </div>
     </div>
 
-    <!-- 기본월 환경설정 팝업(모달) -->
     <div class="modal-overlay" id="settingsModal">
         <div class="modal-content">
             <h2>⚙️ 기본 시작월 설정</h2>
@@ -220,32 +215,49 @@
 
         const daysInMonth = { 5: 31, 6: 30, 7: 31, 8: 31, 9: 30, 10: 31, 11: 30, 12: 31 };
 
-        // 초기화 실행
+        // 초기화 실행 (가장 먼저 기존 데이터를 브라우저에서 읽어옴)
         window.onload = function() {
-            initializeMonthSettings(); // 기본월 설정 불러오기
+            loadAllData(); // 💡 추가됨: 저장된 데이터 불러오기
+            initializeMonthSettings(); 
             renderMembers();
             renderCalendar();
         };
 
-        /* ---------------- 기본월 설정 기능 (LocalStorage 활용) ---------------- */
+        // 💡 추가됨: 브라우저 저장소(LocalStorage)에서 데이터 로드하는 함수
+        function loadAllData() {
+            const savedMembers = localStorage.getItem('clubMembers');
+            const savedAttendance = localStorage.getItem('clubAttendanceData');
+            
+            if (savedMembers) {
+                members = JSON.parse(savedMembers);
+            }
+            if (savedAttendance) {
+                attendanceData = JSON.parse(savedAttendance);
+            }
+        }
+
+        // 💡 추가됨: 데이터가 변경될 때마다 브라우저 저장소에 기록하는 함수
+        function saveAllData() {
+            localStorage.setItem('clubMembers', JSON.stringify(members));
+            localStorage.setItem('clubAttendanceData', JSON.stringify(attendanceData));
+        }
+
+        /* ---------------- 기본월 설정 기능 ---------------- */
         function initializeMonthSettings() {
-            // 브라우저 저장소에서 기존 설정값 가져오기
             let savedMode = localStorage.getItem('clubDefaultMonthMode') || 'auto';
             let savedFixedMonth = localStorage.getItem('clubDefaultFixedMonth') || '5';
 
             if (savedMode === 'auto') {
-                const currentRealMonth = new Date().getMonth() + 1; // JS는 0부터 시작하므로 +1
-                // 현재 월이 동아리 활동 기간(5~12월)인지 확인
+                const currentRealMonth = new Date().getMonth() + 1;
                 if (currentRealMonth >= 5 && currentRealMonth <= 12) {
                     currentSelectedMonth = currentRealMonth;
                 } else {
-                    currentSelectedMonth = 5; // 기간 밖이면 5월로 기본값
+                    currentSelectedMonth = 5;
                 }
             } else {
                 currentSelectedMonth = parseInt(savedFixedMonth);
             }
 
-            // 셀렉트 박스에 반영 및 UI 업데이트
             document.getElementById('monthSelector').value = currentSelectedMonth;
             updateDashboardTitles();
         }
@@ -270,15 +282,12 @@
             const selectedMode = document.querySelector('input[name="defaultMode"]:checked').value;
             const selectedFixedMonth = document.getElementById('fixedMonthSelect').value;
 
-            // 로컬 스토리지에 설정 저장
             localStorage.setItem('clubDefaultMonthMode', selectedMode);
             if (selectedMode === 'fixed') {
                 localStorage.setItem('clubDefaultFixedMonth', selectedFixedMonth);
             }
 
-            alert('기본월 설정이 저장되었습니다. (다음 접속 시 반영됩니다)');
-            
-            // 즉시 화면에도 반영
+            alert('기본월 설정이 저장되었습니다.');
             initializeMonthSettings();
             renderCalendar();
             closeModal('settingsModal');
@@ -306,6 +315,7 @@
             const name = input.value.trim();
             if (name && !members.includes(name)) {
                 members.push(name);
+                saveAllData(); // 💡 데이터 저장
                 renderMembers();
                 input.value = '';
             } else if (members.includes(name)) {
@@ -327,6 +337,7 @@
                     if (nameIdx > -1) attList[nameIdx] = newName.trim();
                 }
                 members[index] = newName.trim();
+                saveAllData(); // 💡 데이터 저장
                 renderMembers();
                 updateDashboard();
             }
@@ -335,6 +346,7 @@
         function deleteMember(index) {
             if(confirm(`'${members[index]}'님을 삭제하시겠습니까?`)) {
                 members.splice(index, 1);
+                saveAllData(); // 💡 데이터 저장
                 renderMembers();
             }
         }
@@ -400,7 +412,6 @@
             document.getElementById('dayModal').style.display = 'flex';
         }
 
-        // 공용 팝업 닫기 함수
         function closeModal(modalId) {
             document.getElementById(modalId).style.display = 'none';
         }
@@ -409,6 +420,8 @@
             const dateKey = `${currentSelectedMonth}-${currentSelectedDay}`;
             const presentMembers = Array.from(document.querySelectorAll('.att-check:checked')).map(cb => cb.value);
             attendanceData[dateKey] = presentMembers;
+            
+            saveAllData(); // 💡 출석체크 정보 브라우저에 즉시 저장
             renderCalendar(); 
             closeModal('dayModal');
         }
@@ -436,6 +449,4 @@
                 navigator.clipboard.writeText(window.location.href);
             }
         }
-    </script>
-</body>
-</html>
+    </script

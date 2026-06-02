@@ -102,4 +102,381 @@
         .btn-close { background: #ccc; }
         
         /* 라디오 버튼 설정 스타일 */
-        .radio-option { margin-bottom: 12
+        .radio-option { margin-bottom: 12px; display: block; cursor: pointer;}
+        .radio-option input { margin-right: 8px; }
+
+        @media (max-width: 600px) {
+            .calendar-grid { gap: 5px; }
+            .day-box { padding: 10px 2px; min-height: 60px; font-size: 0.8rem; }
+            .dashboard { flex-direction: column; }
+            .header-btns { margin-top: 10px; width: 100%; justify-content: flex-end; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>주거복지학술 동아리 점심반 (12:00~13:00)</h1>
+        <div class="header-btns">
+            <button class="header-btn" onclick="sharePage()">공유</button>
+        </div>
+    </header>
+
+    <div class="container">
+        <section class="dashboard">
+            <div class="dash-card">
+                <h3 id="dashTitle1">이번 달 활동 횟수</h3>
+                <div class="number" id="activityCount">0</div>
+            </div>
+            <div class="dash-card">
+                <h3 id="dashTitle2">이번 달 참여 인원 (중복제외)</h3>
+                <div class="number" id="uniqueMembersCount">0</div>
+            </div>
+        </section>
+
+        <section class="member-mgmt">
+            <div class="member-input-area">
+                <input type="text" id="newMemberName" placeholder="새로운 참여자 이름 입력" onkeypress="if(event.key==='Enter') addMember()">
+                <button onclick="addMember()">참여자 추가</button>
+            </div>
+            <div class="member-list" id="memberListArea"></div>
+        </section>
+
+        <section class="calendar-section">
+            <div class="calendar-header">
+                <div>
+                    <select class="month-select" id="monthSelector" onchange="changeMonth()">
+                        <option value="5">2026년 5월</option>
+                        <option value="6">2026년 6월</option>
+                        <option value="7">2026년 7월</option>
+                        <option value="8">2026년 8월</option>
+                        <option value="9">2026년 9월</option>
+                        <option value="10">2026년 10월</option>
+                        <option value="11">2026년 11월</option>
+                        <option value="12">2026년 12월</option>
+                    </select>
+                </div>
+                <button class="setting-btn" onclick="openSettingsModal()">⚙️ 기본월 설정</button>
+            </div>
+            <div class="calendar-grid" id="calendarGrid"></div>
+        </section>
+    </div>
+
+    <div class="modal-overlay" id="dayModal">
+        <div class="modal-content">
+            <h2 id="modalDateTitle">0월 0일 활동</h2>
+            <div class="photo-upload">
+                <label><strong>모임 사진 첨부 (1~2장)</strong></label>
+                <input type="file" multiple accept="image/*" style="margin-top: 5px; width: 100%;">
+            </div>
+            <div><strong>참여자 체크</strong></div>
+            <div class="checkbox-group" id="memberCheckboxes"></div>
+            <div class="modal-btns">
+                <button class="btn-close" onclick="closeModal('dayModal')">취소</button>
+                <button class="btn-save" onclick="saveAttendance()">저장</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="settingsModal">
+        <div class="modal-content">
+            <h2>⚙️ 기본 시작월 설정</h2>
+            <p style="font-size:0.9rem; color:#666; margin-bottom:15px;">웹페이지 첫 화면에 표시될 기준 달을 선택하세요.</p>
+            
+            <div>
+                <label class="radio-option">
+                    <input type="radio" name="defaultMode" value="auto" onchange="toggleFixedMonthSelect()"> 
+                    접속 시점의 <strong>현재 월</strong> 자동 선택
+                </label>
+                <label class="radio-option">
+                    <input type="radio" name="defaultMode" value="fixed" onchange="toggleFixedMonthSelect()"> 
+                    <strong>특정 월</strong> 항상 고정
+                </label>
+                <select id="fixedMonthSelect" style="margin-left: 24px; padding: 5px; border-radius:4px; display: none;">
+                    <option value="5">5월</option><option value="6">6월</option><option value="7">7월</option>
+                    <option value="8">8월</option><option value="9">9월</option><option value="10">10월</option>
+                    <option value="11">11월</option><option value="12">12월</option>
+                </select>
+            </div>
+
+            <div class="modal-btns">
+                <button class="btn-close" onclick="closeModal('settingsModal')">취소</button>
+                <button class="btn-save" onclick="saveSettings()">설정 저장</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 초기 기본값 데이터 구조
+        let members = ['홍길동', '김철수', '이영희']; 
+        let attendanceData = {}; 
+        let currentSelectedMonth = 5;
+        let currentSelectedDay = null;
+
+        const daysInMonth = { 5: 31, 6: 30, 7: 31, 8: 31, 9: 30, 10: 31, 11: 30, 12: 31 };
+
+        window.onload = function() {
+            loadAllData(); 
+            initializeMonthSettings(); 
+            renderMembers();
+            renderCalendar();
+        };
+
+        function loadAllData() {
+            try {
+                const savedMembers = localStorage.getItem('clubMembers');
+                if (savedMembers !== null) {
+                    members = JSON.parse(savedMembers);
+                }
+            } catch (e) {
+                members = ['홍길동', '김철수', '이영희'];
+            }
+
+            try {
+                const savedAttendance = localStorage.getItem('clubAttendanceData');
+                if (savedAttendance !== null) {
+                    attendanceData = JSON.parse(savedAttendance);
+                } else {
+                    attendanceData = {};
+                }
+            } catch (e) {
+                attendanceData = {};
+            }
+        }
+
+        function saveAllData() {
+            try {
+                localStorage.setItem('clubMembers', JSON.stringify(members));
+                localStorage.setItem('clubAttendanceData', JSON.stringify(attendanceData));
+            } catch (e) {}
+        }
+
+        function initializeMonthSettings() {
+            try {
+                let savedMode = localStorage.getItem('clubDefaultMonthMode') || 'auto';
+                let savedFixedMonth = localStorage.getItem('clubDefaultFixedMonth') || '5';
+
+                if (savedMode === 'auto') {
+                    const currentRealMonth = new Date().getMonth() + 1;
+                    if (currentRealMonth >= 5 && currentRealMonth <= 12) {
+                        currentSelectedMonth = currentRealMonth;
+                    } else {
+                        currentSelectedMonth = 5;
+                    }
+                } else {
+                    currentSelectedMonth = parseInt(savedFixedMonth);
+                }
+            } catch(e) {
+                currentSelectedMonth = 5;
+            }
+            document.getElementById('monthSelector').value = currentSelectedMonth;
+            updateDashboardTitles();
+        }
+
+        function openSettingsModal() {
+            try {
+                let savedMode = localStorage.getItem('clubDefaultMonthMode') || 'auto';
+                let savedFixedMonth = localStorage.getItem('clubDefaultFixedMonth') || '5';
+                
+                document.querySelector(`input[name="defaultMode"][value="${savedMode}"]`).checked = true;
+                document.getElementById('fixedMonthSelect').value = savedFixedMonth;
+            } catch(e) {
+                document.querySelector(`input[name="defaultMode"][value="auto"]`).checked = true;
+            }
+            
+            toggleFixedMonthSelect();
+            document.getElementById('settingsModal').style.display = 'flex';
+        }
+
+        function toggleFixedMonthSelect() {
+            const isFixed = document.querySelector('input[name="defaultMode"][value="fixed"]').checked;
+            document.getElementById('fixedMonthSelect').style.display = isFixed ? 'inline-block' : 'none';
+        }
+
+        function saveSettings() {
+            const selectedMode = document.querySelector('input[name="defaultMode"]:checked').value;
+            const selectedFixedMonth = document.getElementById('fixedMonthSelect').value;
+
+            try {
+                localStorage.setItem('clubDefaultMonthMode', selectedMode);
+                if (selectedMode === 'fixed') {
+                    localStorage.setItem('clubDefaultFixedMonth', selectedFixedMonth);
+                }
+            } catch(e) {}
+
+            alert('기본월 설정이 저장되었습니다.');
+            initializeMonthSettings();
+            renderCalendar();
+            closeModal('settingsModal');
+        }
+
+        function renderMembers() {
+            const listArea = document.getElementById('memberListArea');
+            listArea.innerHTML = '';
+            if(!Array.isArray(members)) { members = []; }
+            
+            members.forEach((member, index) => {
+                listArea.innerHTML += `
+                    <div class="member-tag">
+                        <span>${member}</span>
+                        <div>
+                            <button class="btn-edit" onclick="editMember(${index})">수정</button> |
+                            <button class="btn-delete" onclick="deleteMember(${index})">삭제</button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        function addMember() {
+            const input = document.getElementById('newMemberName');
+            const name = input.value.trim();
+            if (name && !members.includes(name)) {
+                members.push(name);
+                saveAllData(); 
+                renderMembers();
+                input.value = '';
+                if(document.getElementById('dayModal').style.display === 'flex') {
+                    openModal(currentSelectedDay); 
+                }
+            } else if (members.includes(name)) {
+                alert('이미 등록된 참여자입니다.');
+            }
+        }
+
+        function editMember(index) {
+            const oldName = members[index];
+            const newName = prompt("수정할 이름을 입력하세요:", oldName);
+            if (newName && newName.trim() !== "" && newName !== oldName) {
+                if(members.includes(newName.trim())) {
+                    alert('이미 존재하는 이름입니다.');
+                    return;
+                }
+                for (let dateKey in attendanceData) {
+                    let attList = attendanceData[dateKey];
+                    if (Array.isArray(attList)) {
+                        let nameIdx = attList.indexOf(oldName);
+                        if (nameIdx > -1) attList[nameIdx] = newName.trim();
+                    }
+                }
+                members[index] = newName.trim();
+                saveAllData(); 
+                renderMembers();
+                renderCalendar(); 
+            }
+        }
+
+        function deleteMember(index) {
+            if(confirm(`'${members[index]}'님을 삭제하시겠습니까?`)) {
+                members.splice(index, 1);
+                saveAllData(); 
+                renderMembers();
+                renderCalendar(); 
+            }
+        }
+
+        function changeMonth() {
+            currentSelectedMonth = parseInt(document.getElementById('monthSelector').value);
+            updateDashboardTitles();
+            renderCalendar();
+        }
+
+        function updateDashboardTitles() {
+            document.getElementById('dashTitle1').innerText = `${currentSelectedMonth}월 활동 횟수`;
+            document.getElementById('dashTitle2').innerText = `${currentSelectedMonth}월 참여 인원`;
+        }
+
+        // 💡 수정된 부분: 캘린더 박스에 숫자 대신 '참여자 이름 목록'을 띄워주는 로직 반영
+        function renderCalendar() {
+            const calendarGrid = document.getElementById('calendarGrid');
+            calendarGrid.innerHTML = '';
+            const maxDays = daysInMonth[currentSelectedMonth];
+
+            for (let i = 1; i <= maxDays; i++) {
+                const dateKey = `${currentSelectedMonth}-${i}`;
+                const presentMembers = attendanceData[dateKey] || [];
+                const dayBox = document.createElement('div');
+                
+                const actualPresent = presentMembers.filter(p => members.includes(p));
+                
+                dayBox.className = `day-box ${actualPresent.length > 0 ? 'active' : ''}`;
+                dayBox.id = `day-${i}`;
+                
+                // 변경점: actualPresent.length + "명 참여" 대신 actualPresent.join(', ') 적용
+                const statusText = actualPresent.length > 0 ? actualPresent.join(', ') : '미입력';
+                const statusColor = actualPresent.length > 0 ? 'var(--primary-blue)' : '#888';
+
+                dayBox.innerHTML = `
+                    <div class="date">${i}일</div>
+                    <div class="status" style="font-size:0.8em; color:${statusColor}; line-height:1.4; word-break:keep-all;">${statusText}</div>
+                `;
+                dayBox.onclick = () => openModal(i);
+                calendarGrid.appendChild(dayBox);
+            }
+            updateDashboard();
+        }
+
+        function openModal(day) {
+            currentSelectedDay = day;
+            const dateKey = `${currentSelectedMonth}-${day}`;
+            document.getElementById('modalDateTitle').innerText = `${currentSelectedMonth}월 ${day}일 활동 입력`;
+            
+            const checkboxContainer = document.getElementById('memberCheckboxes');
+            checkboxContainer.innerHTML = '';
+            const todaysAttendance = attendanceData[dateKey] || [];
+
+            if (members.length === 0) {
+                checkboxContainer.innerHTML = '<p style="color:#888; font-size:0.9rem;">등록된 참여자가 없습니다.</p>';
+            } else {
+                members.forEach(member => {
+                    const isChecked = todaysAttendance.includes(member) ? 'checked' : '';
+                    checkboxContainer.innerHTML += `
+                        <label><input type="checkbox" value="${member}" class="att-check" ${isChecked}> ${member}</label>
+                    `;
+                });
+            }
+            document.getElementById('dayModal').style.display = 'flex';
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+        }
+
+        function saveAttendance() {
+            const dateKey = `${currentSelectedMonth}-${currentSelectedDay}`;
+            const presentMembers = Array.from(document.querySelectorAll('.att-check:checked')).map(cb => cb.value);
+            attendanceData[dateKey] = presentMembers;
+            
+            saveAllData(); 
+            renderCalendar(); 
+            closeModal('dayModal');
+        }
+
+        function updateDashboard() {
+            let activeDaysCount = 0;
+            let uniqueMembers = new Set();
+
+            for (const [dateKey, participants] of Object.entries(attendanceData)) {
+                if (dateKey.startsWith(`${currentSelectedMonth}-`) && Array.isArray(participants) && participants.length > 0) {
+                    const validParticipants = participants.filter(p => members.includes(p));
+                    if(validParticipants.length > 0) {
+                        activeDaysCount++;
+                        validParticipants.forEach(p => uniqueMembers.add(p));
+                    }
+                }
+            }
+            document.getElementById('activityCount').innerText = `${activeDaysCount}회`;
+            document.getElementById('uniqueMembersCount').innerText = `${uniqueMembers.size}명`;
+        }
+
+        function sharePage() {
+            if (navigator.share) {
+                navigator.share({ title: '주거복지학술 동아리 점심반', url: window.location.href }).catch(console.error);
+            } else {
+                alert('주소가 클립보드에 복사되었습니다.');
+                navigator.clipboard.writeText(window.location.href);
+            }
+        }
+    </script>
+</body>
+</html>

@@ -207,7 +207,7 @@
     </div>
 
     <script>
-        // 초기 기본값 데이터 구조 (저장 데이터가 없을 때만 작동)
+        // 초기 예비용 기본 데이터 구조 정의
         let members = ['홍길동', '김철수', '이영희']; 
         let attendanceData = {}; 
         let currentSelectedMonth = 5;
@@ -215,69 +215,60 @@
 
         const daysInMonth = { 5: 31, 6: 30, 7: 31, 8: 31, 9: 30, 10: 31, 11: 30, 12: 31 };
 
-        // 시스템 기동 초기화
+        // 초기화 실행
         window.onload = function() {
-            loadAllData(); // 🛠️ 개별 try-catch로 보완된 데이터 로드
+            loadAllData(); // 안전장치가 추가된 데이터 로드 실행
             initializeMonthSettings(); 
             renderMembers();
             renderCalendar();
         };
 
-        // 🛠️ 오류 원인 1번 해결: 개별 파싱 및 데이터 완전 격리 로드
+        // 🛠️ 대폭 수정: 브라우저 저장 데이터 복구 로직 최적화 (안전장치 추가)
         function loadAllData() {
-            // 멤버 목록 로드
             try {
                 const savedMembers = localStorage.getItem('clubMembers');
-                if (savedMembers !== null) {
-                    members = JSON.parse(savedMembers);
-                }
-            } catch (e) {
-                console.error("멤버 데이터 파싱 실패, 기본값으로 대체합니다.", e);
-                members = ['홍길동', '김철수', '이영희'];
-            }
-
-            // 출석 체크 목록 로드
-            try {
                 const savedAttendance = localStorage.getItem('clubAttendanceData');
-                if (savedAttendance !== null) {
+                
+                // 브라우저에 저장된 멤버 정보가 유효할 때만 변수 교체, 없으면 기본값 유지
+                if (savedMembers && savedMembers !== "[]") {
+                    members = JSON.parse(savedMembers);
+                } else {
+                    // 처음 방문했거나 멤버가 텅 빈 경우 초기 기본값 설정 후 즉시 저장
+                    saveAllData();
+                }
+
+                // 저장된 출석 데이터가 유효할 때만 적용, 없으면 빈 객체 유지
+                if (savedAttendance) {
                     attendanceData = JSON.parse(savedAttendance);
                 } else {
                     attendanceData = {};
                 }
             } catch (e) {
-                console.error("출석 데이터 파싱 실패, 초기화합니다.", e);
+                console.error("데이터 로딩 중 에러 발생, 초기값으로 리셋합니다.", e);
                 attendanceData = {};
             }
         }
 
-        // 🛠️ 오류 원인 2번 해결: 저장소 쓰기 실패 시 전체 스크립트 중단 방어(try-catch 적용)
+        // 데이터 통합 저장 함수
         function saveAllData() {
-            try {
-                localStorage.setItem('clubMembers', JSON.stringify(members));
-                localStorage.setItem('clubAttendanceData', JSON.stringify(attendanceData));
-            } catch (e) {
-                console.warn("브라우저 저장 장치에 접근할 수 없습니다. (시크릿 모드 또는 브라우저 보안 설정을 확인하세요)", e);
-            }
+            localStorage.setItem('clubMembers', JSON.stringify(members));
+            localStorage.setItem('clubAttendanceData', JSON.stringify(attendanceData));
         }
 
         /* ---------------- 기본월 설정 기능 ---------------- */
         function initializeMonthSettings() {
-            try {
-                let savedMode = localStorage.getItem('clubDefaultMonthMode') || 'auto';
-                let savedFixedMonth = localStorage.getItem('clubDefaultFixedMonth') || '5';
+            let savedMode = localStorage.getItem('clubDefaultMonthMode') || 'auto';
+            let savedFixedMonth = localStorage.getItem('clubDefaultFixedMonth') || '5';
 
-                if (savedMode === 'auto') {
-                    const currentRealMonth = new Date().getMonth() + 1;
-                    if (currentRealMonth >= 5 && currentRealMonth <= 12) {
-                        currentSelectedMonth = currentRealMonth;
-                    } else {
-                        currentSelectedMonth = 5;
-                    }
+            if (savedMode === 'auto') {
+                const currentRealMonth = new Date().getMonth() + 1;
+                if (currentRealMonth >= 5 && currentRealMonth <= 12) {
+                    currentSelectedMonth = currentRealMonth;
                 } else {
-                    currentSelectedMonth = parseInt(savedFixedMonth);
+                    currentSelectedMonth = 5;
                 }
-            } catch(e) {
-                currentSelectedMonth = 5;
+            } else {
+                currentSelectedMonth = parseInt(savedFixedMonth);
             }
 
             document.getElementById('monthSelector').value = currentSelectedMonth;
@@ -285,15 +276,11 @@
         }
 
         function openSettingsModal() {
-            try {
-                let savedMode = localStorage.getItem('clubDefaultMonthMode') || 'auto';
-                let savedFixedMonth = localStorage.getItem('clubDefaultFixedMonth') || '5';
-                
-                document.querySelector(`input[name="defaultMode"][value="${savedMode}"]`).checked = true;
-                document.getElementById('fixedMonthSelect').value = savedFixedMonth;
-            } catch(e) {
-                document.querySelector(`input[name="defaultMode"][value="auto"]`).checked = true;
-            }
+            let savedMode = localStorage.getItem('clubDefaultMonthMode') || 'auto';
+            let savedFixedMonth = localStorage.getItem('clubDefaultFixedMonth') || '5';
+            
+            document.querySelector(`input[name="defaultMode"][value="${savedMode}"]`).checked = true;
+            document.getElementById('fixedMonthSelect').value = savedFixedMonth;
             
             toggleFixedMonthSelect();
             document.getElementById('settingsModal').style.display = 'flex';
@@ -308,12 +295,10 @@
             const selectedMode = document.querySelector('input[name="defaultMode"]:checked').value;
             const selectedFixedMonth = document.getElementById('fixedMonthSelect').value;
 
-            try {
-                localStorage.setItem('clubDefaultMonthMode', selectedMode);
-                if (selectedMode === 'fixed') {
-                    localStorage.setItem('clubDefaultFixedMonth', selectedFixedMonth);
-                }
-            } catch(e) {}
+            localStorage.setItem('clubDefaultMonthMode', selectedMode);
+            if (selectedMode === 'fixed') {
+                localStorage.setItem('clubDefaultFixedMonth', selectedFixedMonth);
+            }
 
             alert('기본월 설정이 저장되었습니다.');
             initializeMonthSettings();
@@ -325,8 +310,6 @@
         function renderMembers() {
             const listArea = document.getElementById('memberListArea');
             listArea.innerHTML = '';
-            if(!Array.isArray(members)) { members = []; }
-            
             members.forEach((member, index) => {
                 listArea.innerHTML += `
                     <div class="member-tag">
@@ -348,10 +331,6 @@
                 saveAllData(); 
                 renderMembers();
                 input.value = '';
-                // 💡 출석체크 중일 때 실시간 반영을 위해 모달창 재생성 유도
-                if(document.getElementById('dayModal').style.display === 'flex') {
-                    openModal(currentSelectedDay); 
-                }
             } else if (members.includes(name)) {
                 alert('이미 등록된 참여자입니다.');
             }
@@ -375,7 +354,7 @@
                 members[index] = newName.trim();
                 saveAllData(); 
                 renderMembers();
-                renderCalendar(); // 동기화 갱신
+                updateDashboard();
             }
         }
 
@@ -384,7 +363,6 @@
                 members.splice(index, 1);
                 saveAllData(); 
                 renderMembers();
-                renderCalendar(); // 동기화 갱신
             }
         }
 
@@ -410,14 +388,11 @@
                 const presentMembers = attendanceData[dateKey] || [];
                 const dayBox = document.createElement('div');
                 
-                // 현재 멤버 명단에 실제로 존재하는 인원만 유효한 인원으로 걸러서 표시
-                const actualPresent = presentMembers.filter(p => members.includes(p));
-                
-                dayBox.className = `day-box ${actualPresent.length > 0 ? 'active' : ''}`;
+                dayBox.className = `day-box ${presentMembers.length > 0 ? 'active' : ''}`;
                 dayBox.id = `day-${i}`;
                 
-                const statusText = actualPresent.length > 0 ? `${actualPresent.length}명 참여` : '미입력';
-                const statusColor = actualPresent.length > 0 ? 'var(--primary-blue)' : '#888';
+                const statusText = presentMembers.length > 0 ? `${presentMembers.length}명 참여` : '미입력';
+                const statusColor = presentMembers.length > 0 ? 'var(--primary-blue)' : '#888';
 
                 dayBox.innerHTML = `
                     <div class="date">${i}일</div>
@@ -472,12 +447,8 @@
 
             for (const [dateKey, participants] of Object.entries(attendanceData)) {
                 if (dateKey.startsWith(`${currentSelectedMonth}-`) && Array.isArray(participants) && participants.length > 0) {
-                    // 현재 등록 대장에 존재하는 멤버들만 추출
-                    const validParticipants = participants.filter(p => members.includes(p));
-                    if(validParticipants.length > 0) {
-                        activeDaysCount++;
-                        validParticipants.forEach(p => uniqueMembers.add(p));
-                    }
+                    activeDaysCount++;
+                    participants.forEach(p => uniqueMembers.add(p));
                 }
             }
             document.getElementById('activityCount').innerText = `${activeDaysCount}회`;

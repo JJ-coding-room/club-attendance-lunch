@@ -10,18 +10,10 @@
             --light-bg: #f4f7fa;
             --border-color: #e0e5eb;
             --text-main: #333;
-            --share-green: #2e7d32;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Malgun Gothic', sans-serif; }
         body { background-color: var(--light-bg); color: var(--text-main); }
         
-        /* 읽기 전용 안내 배너 스타일 */
-        .readonly-banner {
-            display: none; background-color: #fff3cd; color: #856404;
-            text-align: center; padding: 10px; font-weight: bold;
-            border-bottom: 1px solid #ffeeba; font-size: 0.95rem;
-        }
-
         /* 헤더 영역 */
         header {
             background-color: var(--primary-blue);
@@ -39,11 +31,6 @@
             border: none; padding: 8px 15px; border-radius: 4px;
             cursor: pointer; font-weight: bold; font-size: 0.9rem;
         }
-        /* 읽기전용 링크 생성 버튼 디자인 */
-        .header-btn.btn-share-view {
-            background-color: var(--share-green); color: white;
-        }
-        .reset-btn { background-color: #d32f2f; color: white; }
 
         /* 메인 컨테이너 */
         .container { max-width: 1000px; margin: 20px auto; padding: 0 15px; }
@@ -125,19 +112,14 @@
             .header-btns { margin-top: 10px; width: 100%; justify-content: flex-end; }
         }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-
-    <div class="readonly-banner" id="readonlyBanner">
-        🔒 현재 화면은 공유된 [읽기 전용] 출석 현황판입니다. 내용 수정 및 참여자 변경이 불가능합니다.
-    </div>
 
     <header>
         <h1>주거복지학술 동아리 점심반 (12:00~13:00)</h1>
         <div class="header-btns">
-            <button class="header-btn btn-share-view" id="shareViewBtn" onclick="generateReadOnlyLink()">출석 현황 링크 생성 (읽기전용)</button>
-            <button class="header-btn reset-btn" id="resetDataBtn" onclick="clearCorruptedData()">데이터 초기화</button>
-            <button class="header-btn" onclick="sharePage()">공유</button>
+            <button class="header-btn" onclick="sharePage()">공유 주소 복사</button>
         </div>
     </header>
 
@@ -153,12 +135,12 @@
             </div>
         </section>
 
-        <section class="member-mgmt" id="memberMgmtSection">
-            <div class="member-input-area" id="memberInputArea">
+        <section class="member-mgmt">
+            <div class="member-input-area">
                 <input type="text" id="newMemberName" placeholder="새로운 참여자 이름 입력" onkeypress="if(event.key==='Enter') addMember()">
                 <button onclick="addMember()">참여자 추가</button>
             </div>
-            <div class="member-list" id="memberListArea"></div>
+            <div class="member-list" id="memberListArea">데이터 동기화 중...</div>
         </section>
 
         <section class="calendar-section">
@@ -175,7 +157,7 @@
                         <option value="12">2026년 12월</option>
                     </select>
                 </div>
-                <button class="setting-btn" id="settingBtn" onclick="openSettingsModal()">⚙️ 기본월 설정</button>
+                <button class="setting-btn" onclick="openSettingsModal()">⚙️ 기본월 설정</button>
             </div>
             <div class="calendar-grid" id="calendarGrid"></div>
         </section>
@@ -184,15 +166,15 @@
     <div class="modal-overlay" id="dayModal">
         <div class="modal-content">
             <h2 id="modalDateTitle">0월 0일 활동</h2>
-            <div class="photo-upload" id="photoUploadArea">
+            <div class="photo-upload">
                 <label><strong>모임 사진 첨부 (1~2장)</strong></label>
                 <input type="file" multiple accept="image/*" style="margin-top: 5px; width: 100%;">
             </div>
             <div><strong>참여자 체크</strong></div>
             <div class="checkbox-group" id="memberCheckboxes"></div>
             <div class="modal-btns">
-                <button class="btn-close" id="modalCancelBtn" onclick="closeModal('dayModal')">취소</button>
-                <button class="btn-save" id="modalSaveBtn" onclick="saveAttendance()">저장</button>
+                <button class="btn-close" onclick="closeModal('dayModal')">취소</button>
+                <button class="btn-save" onclick="saveAttendance()">저장</button>
             </div>
         </div>
     </div>
@@ -226,118 +208,58 @@
     </div>
 
     <script>
-        let members = ['홍길동', '김철수', '이영희']; 
+        // ⚠️ [필수 입력] 수파베이스에서 복사한 주소와 anon 키를 아래 따옴표 안에 붙여넣으세요!
+        const SUPABASE_URL = "https://ycfortizorakqflujpnh.supabase.co/rest/v1/"; 
+        const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InljZm9ydGl6b3Jha3FmbHVqcG5oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1MDM4OTIsImV4cCI6MjA5NjA3OTg5Mn0.ihQXYhqzkk5WBDtI2fMasSyMmliNm4I8hxp7aJJhkec";
+        
+        let supabaseClient = null;
+        let members = []; 
         let attendanceData = {}; 
         let currentSelectedMonth = 5;
         let currentSelectedDay = null;
-        let isReadOnly = false; // 💡 읽기 전용 상태 파악용 변수 추가
 
         const daysInMonth = { 5: 31, 6: 30, 7: 31, 8: 31, 9: 30, 10: 31, 11: 30, 12: 31 };
 
-        window.onload = function() {
-            checkReadOnlyMode(); // 💡 공유받은 링크인지 먼저 검사
+        // 페이지 가동 시 원격 데이터베이스 연결 및 수신
+        window.onload = async function() {
+            if(SUPABASE_URL.includes("여기에")) {
+                alert("코드 134, 135번 줄에 수파베이스 URL과 Key값을 먼저 입력해야 데이터 연동이 시작됩니다.");
+                return;
+            }
+            supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+            
+            await loadAllData(); 
             initializeMonthSettings(); 
             renderMembers();
             renderCalendar();
         };
 
-        // 🛠️ 읽기 전용 모드 검사 및 UI 잠금 장치 실행
-        function checkReadOnlyMode() {
-            const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.has('snapshot')) {
-                // 주소 뒤에 snapshot 데이터가 붙어 접속한 경우
-                isReadOnly = true;
-                document.getElementById('readonlyBanner').style.display = 'block'; // 안내 배너 켜기
-                document.getElementById('shareViewBtn').style.display = 'none';    // 생성 버튼 끄기
-                document.getElementById('resetDataBtn').style.display = 'none';    // 초기화 버튼 끄기
-                document.getElementById('settingBtn').style.display = 'none';      // 기본월 설정 끄기
-                document.getElementById('memberInputArea').style.display = 'none'; // 참여자 입력칸 끄기
-
-                try {
-                    // 주소창의 압축 텍스트를 해독하여 복구
-                    const decodedData = JSON.parse(decodeURIComponent(atob(urlParams.get('snapshot'))));
-                    members = decodedData.m || [];
-                    attendanceData = decodedData.a || {};
-                    if(decodedData.mon) { currentSelectedMonth = decodedData.mon; }
-                } catch (e) {
-                    alert("공유 링크의 데이터가 손상되었거나 올바르지 않습니다.");
-                    loadAllData();
-                    isReadOnly = false;
-                    document.getElementById('readonlyBanner').style.display = 'none';
-                }
-            } else {
-                // 일반 접속인 경우 로컬 브라우저 데이터 로드
-                loadAllData();
-            }
-        }
-
-        // 🛠️ 대망의 기능: 현재 데이터를 통째로 압축해 주소창 전용 링크로 복사해주는 함수
-        function generateReadOnlyLink() {
+        // 🚀 클라우드 데이터베이스에서 동아리 정보 실시간 원격 다운로드
+        async function loadAllData() {
             try {
-                const snapshot = {
-                    m: members,
-                    a: attendanceData,
-                    mon: currentSelectedMonth
-                };
-                // 한글 깨짐 방지 결합형 Base64 압축 기술 적용
-                const compressedText = btoa(encodeURIComponent(JSON.stringify(snapshot)));
-                
-                // 최종 공유용 주소 완성
-                const readOnlyUrl = window.location.origin + window.location.pathname + '?snapshot=' + compressedText;
-                
-                // 클립보드 복사
-                navigator.clipboard.writeText(readOnlyUrl);
-                alert("📋 현재 출석부 상태가 담긴 [읽기 전용] 링크가 복사되었습니다!\n\n이 링크를 동아리방에 공유하면, 다른 사람들은 내가 입력해 둔 명단과 출석 기록(이름 노출 상태)을 그대로 깨끗하게 볼 수 있습니다.\n(링크를 받은 사람들은 수정이 불가능하므로 안심하셔도 됩니다)");
+                // 1. 멤버 명단 가져오기
+                const { data: memberRow } = await supabaseClient.from('club_store').select('data').eq('name', 'members').single();
+                if (memberRow) members = memberRow.data;
+
+                // 2. 출석 체크 데이터 가져오기
+                const { data: attRow } = await supabaseClient.from('club_store').select('data').eq('name', 'attendance').single();
+                if (attRow) attendanceData = attRow.data;
             } catch (e) {
-                alert("공유 링크를 생성하는 중 에러가 발생했습니다.");
+                console.error("데이터 동기화 실패:", e);
             }
         }
 
-        function loadAllData() {
+        // 🚀 변경 사항을 클라우드 데이터베이스에 실시간으로 즉시 저장 및 업로드
+        async function saveToCloud(recordName, payload) {
             try {
-                const savedMembers = localStorage.getItem('clubMembers');
-                if (savedMembers) {
-                    const parsedMembers = JSON.parse(savedMembers);
-                    if (Array.isArray(parsedMembers)) { members = parsedMembers; }
-                }
-                const savedAttendance = localStorage.getItem('clubAttendanceData');
-                if (savedAttendance) {
-                    const parsedAttendance = JSON.parse(savedAttendance);
-                    if (parsedAttendance && typeof parsedAttendance === 'object' && !Array.isArray(parsedAttendance)) {
-                        attendanceData = parsedAttendance;
-                    }
-                }
+                await supabaseClient.from('club_store').update({ data: payload }).eq('name', recordName);
             } catch (e) {
-                attendanceData = {};
+                console.error("클라우드 저장 실패:", e);
             }
         }
 
-        function saveAllData() {
-            if (isReadOnly) return; // 읽기 전용 모드일 때는 내 브라우저에 저장하지 않음
-            try {
-                localStorage.setItem('clubMembers', JSON.stringify(members));
-                localStorage.setItem('clubAttendanceData', JSON.stringify(attendanceData));
-            } catch (e) {}
-        }
-
-        function clearCorruptedData() {
-            if (confirm("브라우저 내부의 모든 동아리 데이터를 초기화하시겠습니까?")) {
-                try {
-                    localStorage.clear();
-                    alert("초기화되었습니다. 페이지를 다시 시작합니다.");
-                    location.href = window.location.origin + window.location.pathname; // 순수 주소로 리다이렉트
-                } catch(e) {
-                    alert("초기화 중 오류가 발생했습니다.");
-                }
-            }
-        }
-
+        /* ---------------- 기본월 설정 기능 (로컬 저장 유지) ---------------- */
         function initializeMonthSettings() {
-            if (isReadOnly) {
-                document.getElementById('monthSelector').value = currentSelectedMonth;
-                updateDashboardTitles();
-                return;
-            }
             try {
                 let savedMode = localStorage.getItem('clubDefaultMonthMode') || 'auto';
                 let savedFixedMonth = localStorage.getItem('clubDefaultFixedMonth') || '5';
@@ -352,16 +274,12 @@
                 } else {
                     currentSelectedMonth = parseInt(savedFixedMonth);
                 }
-            } catch(e) {
-                currentSelectedMonth = 5;
-            }
-            const selector = document.getElementById('monthSelector');
-            if(selector) selector.value = currentSelectedMonth;
+            } catch(e) { currentSelectedMonth = 5; }
+            document.getElementById('monthSelector').value = currentSelectedMonth;
             updateDashboardTitles();
         }
 
         function openSettingsModal() {
-            if (isReadOnly) return;
             try {
                 let savedMode = localStorage.getItem('clubDefaultMonthMode') || 'auto';
                 let savedFixedMonth = localStorage.getItem('clubDefaultFixedMonth') || '5';
@@ -374,67 +292,57 @@
 
         function toggleFixedMonthSelect() {
             const radio = document.querySelector('input[name="defaultMode"][value="fixed"]');
-            if(radio) {
-                const isFixed = radio.checked;
-                document.getElementById('fixedMonthSelect').style.display = isFixed ? 'inline-block' : 'none';
-            }
+            if(radio) document.getElementById('fixedMonthSelect').style.display = radio.checked ? 'inline-block' : 'none';
         }
 
         function saveSettings() {
             const checkedMode = document.querySelector('input[name="defaultMode"]:checked');
             if(!checkedMode) return;
-            const selectedMode = checkedMode.value;
-            const selectedFixedMonth = document.getElementById('fixedMonthSelect').value;
             try {
-                localStorage.setItem('clubDefaultMonthMode', selectedMode);
-                if (selectedMode === 'fixed') {
-                    localStorage.setItem('clubDefaultFixedMonth', selectedFixedMonth);
+                localStorage.setItem('clubDefaultMonthMode', checkedMode.value);
+                if (checkedMode.value === 'fixed') {
+                    localStorage.setItem('clubDefaultFixedMonth', document.getElementById('fixedMonthSelect').value);
                 }
             } catch(e) {}
-            alert('기본월 설정이 저장되었습니다.');
+            alert('기본 시작월이 설정되었습니다.');
             initializeMonthSettings();
             renderCalendar();
             closeModal('settingsModal');
         }
 
+        /* ---------------- 멤버 관리 기능 ---------------- */
         function renderMembers() {
             const listArea = document.getElementById('memberListArea');
             if(!listArea) return;
             listArea.innerHTML = '';
-            if(!Array.isArray(members)) { members = []; }
             
             members.forEach((member, index) => {
-                // 💡 읽기 전용 상태일 때는 수정/삭제 버튼을 문자열에서 배제
-                const actionButtons = isReadOnly ? '' : `<div><button class="btn-edit" onclick="editMember(${index})">수정</button> | <button class="btn-delete" onclick="deleteMember(${index})">삭제</button></div>`;
                 listArea.innerHTML += `
                     <div class="member-tag">
                         <span>${member}</span>
-                        ${actionButtons}
+                        <div>
+                            <button class="btn-edit" onclick="editMember(${index})">수정</button> |
+                            <button class="btn-delete" onclick="deleteMember(${index})">삭제</button>
+                        </div>
                     </div>
                 `;
             });
         }
 
-        function addMember() {
-            if (isReadOnly) return;
+        async function addMember() {
             const input = document.getElementById('newMemberName');
-            if(!input) return;
             const name = input.value.trim();
             if (name && !members.includes(name)) {
                 members.push(name);
-                saveAllData(); 
                 renderMembers();
                 input.value = '';
-                if(document.getElementById('dayModal').style.display === 'flex') {
-                    openModal(currentSelectedDay); 
-                }
+                await saveToCloud('members', members); // 클라우드 동기화
             } else if (members.includes(name)) {
                 alert('이미 등록된 참여자입니다.');
             }
         }
 
-        function editMember(index) {
-            if (isReadOnly) return;
+        async function editMember(index) {
             const oldName = members[index];
             const newName = prompt("수정할 이름을 입력하세요:", oldName);
             if (newName && newName.trim() !== "" && newName !== oldName) {
@@ -450,34 +358,32 @@
                     }
                 }
                 members[index] = newName.trim();
-                saveAllData(); 
                 renderMembers();
                 renderCalendar(); 
+                await saveToCloud('members', members);
+                await saveToCloud('attendance', attendanceData);
             }
         }
 
-        function deleteMember(index) {
-            if (isReadOnly) return;
+        async function deleteMember(index) {
             if(confirm(`'${members[index]}'님을 삭제하시겠습니까?`)) {
                 members.splice(index, 1);
-                saveAllData(); 
                 renderMembers();
                 renderCalendar(); 
+                await saveToCloud('members', members);
             }
         }
 
+        /* ---------------- 캘린더 및 대시보드 기능 ---------------- */
         function changeMonth() {
-            const selector = document.getElementById('monthSelector');
-            if(selector) currentSelectedMonth = parseInt(selector.value);
+            currentSelectedMonth = parseInt(document.getElementById('monthSelector').value);
             updateDashboardTitles();
             renderCalendar();
         }
 
         function updateDashboardTitles() {
-            const t1 = document.getElementById('dashTitle1');
-            const t2 = document.getElementById('dashTitle2');
-            if(t1) t1.innerText = `${currentSelectedMonth}월 활동 횟수`;
-            if(t2) t2.innerText = `${currentSelectedMonth}월 참여 인원`;
+            document.getElementById('dashTitle1').innerText = `${currentSelectedMonth}월 활동 횟수`;
+            document.getElementById('dashTitle2').innerText = `${currentSelectedMonth}월 참여 인원`;
         }
 
         function renderCalendar() {
@@ -488,11 +394,9 @@
 
             for (let i = 1; i <= maxDays; i++) {
                 const dateKey = `${currentSelectedMonth}-${i}`;
-                let presentMembers = attendanceData[dateKey];
-                if(!Array.isArray(presentMembers)) { presentMembers = []; }
-                
+                let presentMembers = attendanceData[dateKey] || [];
                 const dayBox = document.createElement('div');
-                const actualPresent = presentMembers.filter(p => typeof p === 'string' && members.includes(p));
+                const actualPresent = presentMembers.filter(p => members.includes(p));
                 
                 dayBox.className = `day-box ${actualPresent.length > 0 ? 'active' : ''}`;
                 dayBox.id = `day-${i}`;
@@ -513,87 +417,59 @@
         function openModal(day) {
             currentSelectedDay = day;
             const dateKey = `${currentSelectedMonth}-${day}`;
-            document.getElementById('modalDateTitle').innerText = `${currentSelectedMonth}월 ${day}일 활동 내용`;
+            document.getElementById('modalDateTitle').innerText = `${currentSelectedMonth}월 ${day}일 활동 입력`;
             
             const checkboxContainer = document.getElementById('memberCheckboxes');
-            if(!checkboxContainer) return;
             checkboxContainer.innerHTML = '';
-            
-            let todaysAttendance = attendanceData[dateKey];
-            if(!Array.isArray(todaysAttendance)) { todaysAttendance = []; }
+            let todaysAttendance = attendanceData[dateKey] || [];
 
             if (members.length === 0) {
                 checkboxContainer.innerHTML = '<p style="color:#888; font-size:0.9rem;">등록된 참여자가 없습니다.</p>';
             } else {
                 members.forEach(member => {
                     const isChecked = todaysAttendance.includes(member) ? 'checked' : '';
-                    // 💡 읽기 전용 상태일 때는 체크박스를 강제로 비활성화(disabled) 처리
-                    const isDisabled = isReadOnly ? 'disabled' : '';
                     checkboxContainer.innerHTML += `
-                        <label><input type="checkbox" value="${member}" class="att-check" ${isChecked} ${isDisabled}> ${member}</label>
+                        <label><input type="checkbox" value="${member}" class="att-check" ${isChecked}> ${member}</label>
                     `;
                 });
             }
-
-            // 💡 읽기 전용일 때는 하단 버튼 구조 및 사진 첨부창 변경 제어
-            if (isReadOnly) {
-                document.getElementById('photoUploadArea').style.display = 'none'; // 사진 선택창 감추기
-                document.getElementById('modalSaveBtn').style.display = 'none';    // 저장 버튼 감추기
-                document.getElementById('modalCancelBtn').innerText = '닫기';      // 취소 ➔ 닫기 변경
-            } else {
-                document.getElementById('photoUploadArea').style.display = 'block';
-                document.getElementById('modalSaveBtn').style.display = 'inline-block';
-                document.getElementById('modalCancelBtn').innerText = '취소';
-            }
-
             document.getElementById('dayModal').style.display = 'flex';
         }
 
         function closeModal(modalId) {
-            const modal = document.getElementById(modalId);
-            if(modal) modal.style.display = 'none';
+            document.getElementById(modalId).style.display = 'none';
         }
 
-        function saveAttendance() {
-            if (isReadOnly) return;
+        async function saveAttendance() {
             const dateKey = `${currentSelectedMonth}-${currentSelectedDay}`;
             const presentMembers = Array.from(document.querySelectorAll('.att-check:checked')).map(cb => cb.value);
             attendanceData[dateKey] = presentMembers;
             
-            saveAllData(); 
             renderCalendar(); 
             closeModal('dayModal');
+            await saveToCloud('attendance', attendanceData); // 클라우드 동기화
         }
 
         function updateDashboard() {
             let activeDaysCount = 0;
             let uniqueMembers = new Set();
 
-            if (attendanceData && typeof attendanceData === 'object') {
-                for (const [dateKey, participants] of Object.entries(attendanceData)) {
-                    if (dateKey.startsWith(`${currentSelectedMonth}-`) && Array.isArray(participants) && participants.length > 0) {
-                        const validParticipants = participants.filter(p => typeof p === 'string' && members.includes(p));
-                        if(validParticipants.length > 0) {
-                            activeDaysCount++;
-                            validParticipants.forEach(p => uniqueMembers.add(p));
-                        }
+            for (const [dateKey, participants] of Object.entries(attendanceData)) {
+                if (dateKey.startsWith(`${currentSelectedMonth}-`) && Array.isArray(participants) && participants.length > 0) {
+                    const validParticipants = participants.filter(p => members.includes(p));
+                    if(validParticipants.length > 0) {
+                        activeDaysCount++;
+                        validParticipants.forEach(p => uniqueMembers.add(p));
                     }
                 }
             }
-            
-            const c1 = document.getElementById('activityCount');
-            const c2 = document.getElementById('uniqueMembersCount');
-            if(c1) c1.innerText = `${activeDaysCount}회`;
-            if(c2) c2.innerText = `${uniqueMembers.size}명`;
+            document.getElementById('activityCount').innerText = `${activeDaysCount}회`;
+            document.getElementById('uniqueMembersCount').innerText = `${uniqueMembers.size}명`;
         }
 
         function sharePage() {
-            if (navigator.share) {
-                navigator.share({ title: '주거복지학술 동아리 점심반', url: window.location.href }).catch(console.error);
-            } else {
-                alert('주소가 클립보드에 복사되었습니다.');
-                navigator.clipboard.writeText(window.location.href);
-            }
+            navigator.clipboard.writeText(window.location.href);
+            alert("📋 동아리 출석부 주소가 복사되었습니다!\n이 링크를 동아리원들에게 공유하면 누구나 접속해서 실시간으로 출석을 확인하고 편집할 수 있습니다.");
         }
     </script>
 </body>

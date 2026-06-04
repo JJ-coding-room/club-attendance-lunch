@@ -40,6 +40,7 @@
         .header-btn.btn-admin-auth {
             background-color: #fff3e0; color: var(--admin-orange);
         }
+        .reset-btn { background-color: #d32f2f; color: white; }
 
         /* 메인 컨테이너 */
         .container { max-width: 1000px; margin: 20px auto; padding: 0 15px; }
@@ -105,7 +106,6 @@
         .checkbox-group { margin: 15px 0; max-height: 120px; overflow-y: auto; }
         .checkbox-group label { display: block; margin-bottom: 8px; cursor: pointer; }
         
-        /* 사진 디자인 영역 보완 */
         .photo-upload { margin-bottom: 20px; background: #fafafa; padding: 12px; border-radius: 6px; border: 1px dashed var(--border-color); }
         .photo-upload label { display: block; margin-bottom: 5px; font-size: 0.9rem; }
         .modal-btns { display: flex; justify-content: flex-end; gap: 10px; margin-top:20px; }
@@ -134,6 +134,7 @@
     <header>
         <h1>주거복지학술 동아리 점심반 (12:00~13:00)</h1>
         <div class="header-btns">
+            <button class="header-btn reset-btn" onclick="clearCorruptedData()">데이터 초기화</button>
             <button class="header-btn btn-admin-auth" id="authBtn" onclick="toggleAdminMode()">🔧 관리자 인증</button>
             <button class="header-btn" onclick="sharePage()">공유 주소 복사</button>
         </div>
@@ -181,12 +182,13 @@
 
     <div class="modal-overlay" id="dayModal">
         <div class="modal-content">
-            <h2 id="modalDateTitle">0월 0일 활동 입력</h2>
+            <h2 id="modalDateTitle">0월 0일 활동 내용</h2>
             
             <div class="photo-upload">
                 <label><strong>📸 활동 사진 (최대 2장)</strong></label>
                 <div id="adminPhotoInputWrap" style="display: none; margin-bottom: 10px;">
                     <input type="file" id="clubPhotoInput" multiple accept="image/*" onchange="handleFileSelect(this)" style="font-size:0.85rem; width:100%;">
+                    <div id="uploadStatusText" style="font-size:0.8rem; color:var(--admin-orange); margin-top:4px; font-weight:bold;"></div>
                 </div>
                 <div id="photoListArea" style="display: flex; flex-direction: column; gap: 6px;"></div>
             </div>
@@ -229,7 +231,7 @@
     </div>
 
     <script>
-        // ⚠️ [필수 입력] 발급받은 본인의 주소를 끝에 슬래시(/) 없이 명확히 기재하세요.
+        // ⚠️ [필수 확인] 본인의 수파베이스 주소 끝에 슬래시(/)가 없어야 합니다!
         const SUPABASE_URL = "https://ycfortizorakqflujpnh.supabase.co"; 
         const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InljZm9ydGl6b3Jha3FmbHVqcG5oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1MDM4OTIsImV4cCI6MjA5NjA3OTg5Mn0.ihQXYhqzkk5WBDtI2fMasSyMmliNm4I8hxp7aJJhkec";
         
@@ -239,20 +241,25 @@
         let currentSelectedMonth = 5;
         let currentSelectedDay = null;
         let isAdminMode = false; 
-        let tempUploadedPhotos = []; // 💡 현재 활성화된 모달 팝업창의 임시 사진 배열 저장소
+        let tempUploadedPhotos = []; 
 
         const daysInMonth = { 5: 31, 6: 30, 7: 31, 8: 31, 9: 30, 10: 31, 11: 30, 12: 31 };
 
         window.onload = async function() {
-            if(SUPABASE_URL.includes("여기에")) {
-                alert("코드 142, 143번 줄에 수파베이스 주소와 키값을 입력하셔야 시스템이 정상 가동됩니다.");
-                return;
+            try {
+                if(SUPABASE_URL.includes("여기에")) {
+                    alert("코드 142, 143번 줄에 수파베이스 주소와 키값을 입력하셔야 시스템이 정상 가동됩니다.");
+                    return;
+                }
+                supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+                await loadAllData(); 
+            } catch (e) {
+                console.error("초기 기동 에러: ", e);
+            } finally {
+                // 🛠️ 철벽 방어: 에러가 나든 안 나든 "데이터 연동 중..." 글자를 지우고 화면은 무조건 표시함
+                initializeMonthSettings(); 
+                applyModeUI(); 
             }
-            supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-            
-            await loadAllData(); 
-            initializeMonthSettings(); 
-            applyModeUI(); 
         };
 
         function toggleAdminMode() {
@@ -304,22 +311,14 @@
                 const { data: attRow } = await supabaseClient.from('club_store').select('data').eq('name', 'attendance').single();
                 if (attRow) {
                     attendanceData = attRow.data;
-                    // 💡 구버전 단순 명단 배열 데이터를 신버전 객체 구조(participants + photos)로 자동 이관 가동
                     for (let key in attendanceData) {
                         if (Array.isArray(attendanceData[key])) {
-                            attendanceData[key] = {
-                                participants: attendanceData[key],
-                                photos: []
-                            };
+                            attendanceData[key] = { participants: attendanceData[key], photos: [] };
                         }
                     }
                 }
             } catch (e) {
                 console.error("데이터 수신 오류:", e);
-                const localMem = localStorage.getItem('backup_members');
-                const localAtt = localStorage.getItem('backup_attendance');
-                if(localMem) members = JSON.parse(localMem);
-                if(localAtt) attendanceData = JSON.parse(localAtt);
             }
         }
 
@@ -335,40 +334,71 @@
             }
         }
 
-        /* ---------------- 사진 데이터 처리 함수 ---------------- */
-        
-        // 🚀 파일 탐색기에서 이미지 선택 시 Base64 인코딩 처리
+        /* ---------------- 🛠️ 핵심 수정: 대용량 이미지 픽셀 자동 압축 엔진 ---------------- */
         function handleFileSelect(input) {
             const files = input.files;
-            if(!files) return;
+            if(!files || files.length === 0) return;
             
+            const statusText = document.getElementById('uploadStatusText');
+            if(statusText) statusText.innerText = "⏳ 사진 압축 및 처리 중...";
+
+            let processedCount = 0;
+
             for(let i=0; i<files.length; i++) {
                 if (tempUploadedPhotos.length >= 2) {
                     alert("사진은 최대 2장까지만 등록할 수 있습니다.");
                     break;
                 }
                 const file = files[i];
-                
-                // 용량 초과 방지 락 (3MB 이하 권장)
-                if (file.size > 3 * 1024 * 1024) {
-                    alert(`'${file.name}' 파일 용량이 너무 큽니다. 3MB 이하의 사진 파일만 올려주세요.`);
-                    continue;
-                }
-
                 const reader = new FileReader();
+                
                 reader.onload = function(event) {
-                    tempUploadedPhotos.push({
-                        name: file.name,
-                        data: event.target.result // 이미지 문자열 텍스트 데이터화
-                    });
-                    renderPhotoArea();
+                    const img = new Image();
+                    img.onload = function() {
+                        // 1. 캔버스를 활용한 픽셀 리사이징 (최대 가로/세로 800px로 축소)
+                        const canvas = document.createElement('canvas');
+                        let width = img.width;
+                        let height = img.height;
+                        const MAX_SIZE = 800; 
+
+                        if (width > height) {
+                            if (width > MAX_SIZE) {
+                                height *= MAX_SIZE / width;
+                                width = MAX_SIZE;
+                            }
+                        } else {
+                            if (height > MAX_SIZE) {
+                                width *= MAX_SIZE / height;
+                                height = MAX_SIZE;
+                            }
+                        }
+
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+
+                        // 2. JPEG 포맷 가공 및 70% 화질 압축 기법으로 용량을 50분의 1로 축소!
+                        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7);
+
+                        tempUploadedPhotos.push({
+                            name: file.name.split('.')[0] + '.jpg', 
+                            data: compressedBase64
+                        });
+
+                        processedCount++;
+                        if (processedCount === Math.min(files.length, 2)) {
+                            if(statusText) statusText.innerText = "✅ 압축 완료!";
+                            renderPhotoArea();
+                        }
+                    };
+                    img.src = event.target.result;
                 };
                 reader.readAsDataURL(file);
             }
             input.value = ''; 
         }
 
-        // 🚀 모드별 팝업창 내부 사진 컴포넌트 렌더링
         function renderPhotoArea() {
             const photoListArea = document.getElementById('photoListArea');
             const adminInputWrap = document.getElementById('adminPhotoInputWrap');
@@ -383,8 +413,248 @@
                     photoListArea.innerHTML = '<p style="color:#888; font-size:0.85rem; text-align:center;">등록된 사진이 없습니다. (최대 2장)</p>';
                 } else {
                     tempUploadedPhotos.forEach((photo, idx) => {
-                        // 관리자 모드: 사진 썸네일 + 사진 이름 클릭 시 다운로드 기능 연동 + 우측 삭제 버튼 배정
                         photoListArea.innerHTML += `
                             <div style="display:flex; align-items:center; gap:10px; background:#f4f7fa; padding:6px; border-radius:6px; border:1px solid #e0e5eb;">
                                 <img src="${photo.data}" style="width:38px; height:38px; object-fit:cover; border-radius:4px; border:1px solid #ddd;">
-                                <a href="${photo.data}"
+                                <a href="${photo.data}" download="${photo.name}" title="클릭하면 다운로드" style="font-size:0.85rem; color:var(--primary-blue); flex:1; text-decoration:underline; font-weight:bold; word-break:break-all;">${photo.name}</a>
+                                <button type="button" onclick="removeTempPhoto(${idx})" style="color:#d32f2f; border:none; background:none; cursor:pointer; font-size:0.85rem; font-weight:bold; padding:0 5px;">삭제</button>
+                            </div>
+                        `;
+                    });
+                }
+            } else {
+                if(adminInputWrap) adminInputWrap.style.display = 'none';
+                
+                if (tempUploadedPhotos.length === 0) {
+                    photoListArea.innerHTML = '<p style="color:#888; font-size:0.85rem; text-align:center;">등록된 사진이 없습니다.</p>';
+                } else {
+                    let imgHtml = '<div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:center; margin-top:5px;">';
+                    tempUploadedPhotos.forEach((photo) => {
+                        imgHtml += `
+                            <div style="text-align:center;">
+                                <img src="${photo.data}" style="width:110px; height:110px; object-fit:cover; border-radius:6px; border:1px solid #e0e5eb; box-shadow:0 2px 4px rgba(0,0,0,0.06);">
+                            </div>
+                        `;
+                    });
+                    imgHtml += '</div>';
+                    photoListArea.innerHTML = imgHtml;
+                }
+            }
+        }
+
+        function removeTempPhoto(index) {
+            tempUploadedPhotos.splice(index, 1);
+            renderPhotoArea();
+        }
+
+        /* ---------------- 기본 구성원 설정 기능 ---------------- */
+        function initializeMonthSettings() {
+            try {
+                let savedMode = localStorage.getItem('clubDefaultMonthMode') || 'auto';
+                let savedFixedMonth = localStorage.getItem('clubDefaultFixedMonth') || '5';
+
+                if (savedMode === 'auto') {
+                    const currentRealMonth = new Date().getMonth() + 1;
+                    if (currentRealMonth >= 5 && currentRealMonth <= 12) {
+                        currentSelectedMonth = currentRealMonth;
+                    } else { currentSelectedMonth = 5; }
+                } else {
+                    currentSelectedMonth = parseInt(savedFixedMonth);
+                }
+            } catch(e) { currentSelectedMonth = 5; }
+            const selector = document.getElementById('monthSelector');
+            if(selector) selector.value = currentSelectedMonth;
+            updateDashboardTitles();
+        }
+
+        function openSettingsModal() {
+            if (!isAdminMode) return;
+            try {
+                let savedMode = localStorage.getItem('clubDefaultMonthMode') || 'auto';
+                let savedFixedMonth = localStorage.getItem('clubDefaultFixedMonth') || '5';
+                document.querySelector(`input[name="defaultMode"][value="${savedMode}"]`).checked = true;
+                document.getElementById('fixedMonthSelect').value = savedFixedMonth;
+            } catch(e) {}
+            toggleFixedMonthSelect();
+            document.getElementById('settingsModal').style.display = 'flex';
+        }
+
+        function toggleFixedMonthSelect() {
+            const radio = document.querySelector('input[name="defaultMode"][value="fixed"]');
+            if(radio) document.getElementById('fixedMonthSelect').style.display = radio.checked ? 'inline-block' : 'none';
+        }
+
+        function saveSettings() {
+            const checkedMode = document.querySelector('input[name="defaultMode"]:checked');
+            if(!checkedMode) return;
+            try {
+                localStorage.setItem('clubDefaultMonthMode', checkedMode.value);
+                if (checkedMode.value === 'fixed') {
+                    localStorage.setItem('clubDefaultFixedMonth', document.getElementById('fixedMonthSelect').value);
+                }
+            } catch(e) {}
+            alert('기본 시작월이 설정되었습니다.');
+            initializeMonthSettings();
+            renderCalendar();
+            closeModal('settingsModal');
+        }
+
+        function renderMembers() {
+            const listArea = document.getElementById('memberListArea');
+            if(!listArea) return;
+            listArea.innerHTML = '';
+            if(!Array.isArray(members)) { members = []; }
+            
+            members.forEach((member, index) => {
+                const actionButtons = isAdminMode ? `<div><button class="btn-edit" onclick="editMember(${index})">수정</button> | <button class="btn-delete" onclick="deleteMember(${index})">삭제</button></div>` : '';
+                listArea.innerHTML += `
+                    <div class="member-tag">
+                        <span>${member}</span>
+                        ${actionButtons}
+                    </div>
+                `;
+            });
+        }
+
+        async function addMember() {
+            if (!isAdminMode) return;
+            const input = document.getElementById('newMemberName');
+            const name = input.value.trim();
+            if (name && !members.includes(name)) {
+                members.push(name);
+                renderMembers();
+                input.value = '';
+                await saveToCloud('members', members); 
+            }
+        }
+
+        async function editMember(index) {
+            if (!isAdminMode) return;
+            const oldName = members[index];
+            const newName = prompt("수정할 이름을 입력하세요:", oldName);
+            if (newName && newName.trim() !== "" && newName !== oldName) {
+                if(members.includes(newName.trim())) {
+                    alert('이미 존재하는 이름입니다.');
+                    return;
+                }
+                for (let dateKey in attendanceData) {
+                    let dayInfo = attendanceData[dateKey];
+                    let attList = (dayInfo && !Array.isArray(dayInfo)) ? (dayInfo.participants || []) : (dayInfo || []);
+                    if (Array.isArray(attList)) {
+                        let nameIdx = attList.indexOf(oldName);
+                        if (nameIdx > -1) attList[nameIdx] = newName.trim();
+                    }
+                }
+                members[index] = newName.trim();
+                renderMembers();
+                renderCalendar(); 
+                await saveToCloud('members', members);
+                await saveToCloud('attendance', attendanceData);
+            }
+        }
+
+        async function deleteMember(index) {
+            if (!isAdminMode) return;
+            if(confirm(`'${members[index]}'님을 삭제하시겠습니까?`)) {
+                members.splice(index, 1);
+                renderMembers();
+                renderCalendar(); 
+                await saveToCloud('members', members);
+            }
+        }
+
+        function changeMonth() {
+            currentSelectedMonth = parseInt(document.getElementById('monthSelector').value);
+            updateDashboardTitles();
+            renderCalendar();
+        }
+
+        function updateDashboardTitles() {
+            document.getElementById('dashTitle1').innerText = `${currentSelectedMonth}월 활동 횟수`;
+            document.getElementById('dashTitle2').innerText = `${currentSelectedMonth}월 참여 인원`;
+        }
+
+        function renderCalendar() {
+            const calendarGrid = document.getElementById('calendarGrid');
+            if(!calendarGrid) return;
+            calendarGrid.innerHTML = '';
+            const maxDays = daysInMonth[currentSelectedMonth] || 31;
+
+            for (let i = 1; i <= maxDays; i++) {
+                const dateKey = `${currentSelectedMonth}-${i}`;
+                let dayInfo = attendanceData[dateKey];
+                
+                let presentMembers = (dayInfo && !Array.isArray(dayInfo)) ? (dayInfo.participants || []) : (dayInfo || []);
+                if(!Array.isArray(presentMembers)) { presentMembers = []; }
+                
+                const dayBox = document.createElement('div');
+                const actualPresent = presentMembers.filter(p => members.includes(p));
+                
+                dayBox.className = `day-box ${actualPresent.length > 0 ? 'active' : ''}`;
+                dayBox.id = `day-${i}`;
+                
+                const statusText = actualPresent.length > 0 ? actualPresent.join(', ') : '미입력';
+                const statusColor = actualPresent.length > 0 ? 'var(--primary-blue)' : '#888';
+
+                dayBox.innerHTML = `
+                    <div class="date">${i}일</div>
+                    <div class="status" style="font-size:0.8em; color:${statusColor}; line-height:1.4; word-break:keep-all;">${statusText}</div>
+                `;
+                dayBox.onclick = () => openModal(i);
+                calendarGrid.appendChild(dayBox);
+            }
+            updateDashboard();
+        }
+
+        function openModal(day) {
+            currentSelectedDay = day;
+            const dateKey = `${currentSelectedMonth}-${day}`;
+            document.getElementById('modalDateTitle').innerText = `${currentSelectedMonth}월 ${day}일 활동 내용`;
+            
+            // 이미지 상태 가이드라인 초기화
+            const statusText = document.getElementById('uploadStatusText');
+            if(statusText) statusText.innerText = "";
+
+            let dayInfo = attendanceData[dateKey] || { participants: [], photos: [] };
+            if (Array.isArray(dayInfo)) {
+                dayInfo = { participants: dayInfo, photos: [] };
+            }
+            
+            tempUploadedPhotos = dayInfo.photos || [];
+            renderPhotoArea();
+
+            const checkboxContainer = document.getElementById('memberCheckboxes');
+            checkboxContainer.innerHTML = '';
+            let todaysAttendance = dayInfo.participants || [];
+
+            if (members.length === 0) {
+                checkboxContainer.innerHTML = '<p style="color:#888; font-size:0.9rem;">등록된 참여자가 없습니다.</p>';
+            } else {
+                members.forEach(member => {
+                    const isChecked = todaysAttendance.includes(member) ? 'checked' : '';
+                    const isDisabled = !isAdminMode ? 'disabled' : '';
+                    checkboxContainer.innerHTML += `
+                        <label><input type="checkbox" value="${member}" class="att-check" ${isChecked} ${isDisabled}> ${member}</label>
+                    `;
+                });
+            }
+
+            if (!isAdminMode) {
+                document.getElementById('modalSaveBtn').style.display = 'none';
+                document.getElementById('modalCancelBtn').innerText = '닫기';
+            } else {
+                document.getElementById('modalSaveBtn').style.display = 'inline-block';
+                document.getElementById('modalCancelBtn').innerText = '취소';
+            }
+
+            document.getElementById('dayModal').style.display = 'flex';
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+        }
+
+        async function saveAttendance() {
+            if (!isAdminMode) return;
+            const dateKey = `${currentSelectedMonth}-${currentSelectedDay}`;
+            const presentMembers = Array.from(document.querySelectorAll('.att-check:checked')).

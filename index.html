@@ -10,19 +10,25 @@
             --light-bg: #f4f7fa;
             --border-color: #e0e5eb;
             --text-main: #333;
+            --admin-orange: #e65100;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Malgun Gothic', sans-serif; }
         body { background-color: var(--light-bg); color: var(--text-main); }
         
+        /* 상단 상태 안내 배너 */
+        .status-banner {
+            background-color: #e8f0fe; color: var(--primary-blue);
+            text-align: center; padding: 10px; font-weight: bold;
+            border-bottom: 1px solid var(--border-color); font-size: 0.95rem;
+        }
+        .status-banner.admin-mode {
+            background-color: #fff3e0; color: var(--admin-orange);
+        }
+
         /* 헤더 영역 */
         header {
-            background-color: var(--primary-blue);
-            color: white;
-            padding: 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
+            background-color: var(--primary-blue); color: white; padding: 20px;
+            display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;
         }
         header h1 { font-size: 1.2rem; margin-bottom: 5px; }
         .header-btns { display: flex; gap: 10px; flex-wrap: wrap; }
@@ -30,6 +36,9 @@
             background-color: white; color: var(--primary-blue);
             border: none; padding: 8px 15px; border-radius: 4px;
             cursor: pointer; font-weight: bold; font-size: 0.9rem;
+        }
+        .header-btn.btn-admin-auth {
+            background-color: #fff3e0; color: var(--admin-orange);
         }
 
         /* 메인 컨테이너 */
@@ -67,6 +76,7 @@
 
         /* 캘린더 영역 */
         .calendar-section { background: white; padding: 20px; border-radius: 8px; border: 1px solid var(--border-color); }
+        .calendar-section h2 { font-size: 1.2rem; margin-bottom: 10px; }
         .calendar-header { display: flex; justify-content: space-between; margin-bottom: 15px; align-items: center; }
         .month-select { padding: 8px; font-size: 1.1rem; font-weight: bold; border-color: #ccc; border-radius: 4px;}
         .setting-btn { padding: 8px 12px; background: #f0f0f0; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; font-weight:bold; }
@@ -101,7 +111,6 @@
         .btn-save { background: var(--primary-blue); color: white; }
         .btn-close { background: #ccc; }
         
-        /* 라디오 버튼 설정 스타일 */
         .radio-option { margin-bottom: 12px; display: block; cursor: pointer;}
         .radio-option input { margin-right: 8px; }
 
@@ -116,9 +125,14 @@
 </head>
 <body>
 
+    <div class="status-banner" id="statusBanner">
+        👀 현재 [일반 조회 모드]입니다. 출석 내역 확인만 가능합니다.
+    </div>
+
     <header>
         <h1>주거복지학술 동아리 점심반 (12:00~13:00)</h1>
         <div class="header-btns">
+            <button class="header-btn btn-admin-auth" id="authBtn" onclick="toggleAdminMode()">🔧 관리자 인증</button>
             <button class="header-btn" onclick="sharePage()">공유 주소 복사</button>
         </div>
     </header>
@@ -136,11 +150,11 @@
         </section>
 
         <section class="member-mgmt">
-            <div class="member-input-area">
+            <div class="member-input-area" id="memberInputArea" style="display: none;">
                 <input type="text" id="newMemberName" placeholder="새로운 참여자 이름 입력" onkeypress="if(event.key==='Enter') addMember()">
                 <button onclick="addMember()">참여자 추가</button>
             </div>
-            <div class="member-list" id="memberListArea">데이터 동기화 중...</div>
+            <div class="member-list" id="memberListArea">데이터 연동 중...</div>
         </section>
 
         <section class="calendar-section">
@@ -157,7 +171,7 @@
                         <option value="12">2026년 12월</option>
                     </select>
                 </div>
-                <button class="setting-btn" onclick="openSettingsModal()">⚙️ 기본월 설정</button>
+                <button class="setting-btn" id="settingBtn" onclick="openSettingsModal()" style="display: none;">⚙️ 기본월 설정</button>
             </div>
             <div class="calendar-grid" id="calendarGrid"></div>
         </section>
@@ -166,15 +180,15 @@
     <div class="modal-overlay" id="dayModal">
         <div class="modal-content">
             <h2 id="modalDateTitle">0월 0일 활동</h2>
-            <div class="photo-upload">
+            <div class="photo-upload" id="photoUploadArea">
                 <label><strong>모임 사진 첨부 (1~2장)</strong></label>
                 <input type="file" multiple accept="image/*" style="margin-top: 5px; width: 100%;">
             </div>
             <div><strong>참여자 체크</strong></div>
             <div class="checkbox-group" id="memberCheckboxes"></div>
             <div class="modal-btns">
-                <button class="btn-close" onclick="closeModal('dayModal')">취소</button>
-                <button class="btn-save" onclick="saveAttendance()">저장</button>
+                <button class="btn-close" id="modalCancelBtn" onclick="closeModal('dayModal')">취소</button>
+                <button class="btn-save" id="modalSaveBtn" onclick="saveAttendance()">저장</button>
             </div>
         </div>
     </div>
@@ -208,7 +222,7 @@
     </div>
 
     <script>
-        // ⚠️ [필수 입력] 수파베이스에서 복사한 주소와 anon 키를 아래 따옴표 안에 붙여넣으세요!
+        // ⚠️ [필수 입력] 발급받은 본인의 Supabase 주소와 anon public 키를 아래에 꼭 다시 넣어주세요!
         const SUPABASE_URL = "https://ycfortizorakqflujpnh.supabase.co/rest/v1/"; 
         const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InljZm9ydGl6b3Jha3FmbHVqcG5oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1MDM4OTIsImV4cCI6MjA5NjA3OTg5Mn0.ihQXYhqzkk5WBDtI2fMasSyMmliNm4I8hxp7aJJhkec";
         
@@ -217,48 +231,109 @@
         let attendanceData = {}; 
         let currentSelectedMonth = 5;
         let currentSelectedDay = null;
+        let isAdminMode = false; 
 
         const daysInMonth = { 5: 31, 6: 30, 7: 31, 8: 31, 9: 30, 10: 31, 11: 30, 12: 31 };
 
-        // 페이지 가동 시 원격 데이터베이스 연결 및 수신
         window.onload = async function() {
             if(SUPABASE_URL.includes("여기에")) {
-                alert("코드 134, 135번 줄에 수파베이스 URL과 Key값을 먼저 입력해야 데이터 연동이 시작됩니다.");
+                alert("코드 142, 143번 줄에 수파베이스 주소와 키값을 먼저 입력하셔야 데이터 연동이 시작됩니다.");
                 return;
             }
             supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
             
             await loadAllData(); 
             initializeMonthSettings(); 
-            renderMembers();
-            renderCalendar();
+            applyModeUI(); 
         };
 
-        // 🚀 클라우드 데이터베이스에서 동아리 정보 실시간 원격 다운로드
+        function toggleAdminMode() {
+            if (isAdminMode) {
+                isAdminMode = false;
+                alert("관리자 모드가 해제되었습니다. [일반 조회 모드]로 전환합니다.");
+                applyModeUI();
+            } else {
+                const password = prompt("동아리 관리자 비밀번호를 입력하세요:");
+                if (password === "3317") {
+                    isAdminMode = true;
+                    alert("🔓 인증 성공! 관리자 [편집 모드]가 활성화되었습니다.");
+                    applyModeUI();
+                } else if (password !== null) {
+                    alert("❌ 비밀번호가 올바르지 않습니다.");
+                }
+            }
+        }
+
+        // 🛠️ 오타 수정 완료: inputArea.style.style.display ➔ inputArea.style.display 로 정상 교체
+        function applyModeUI() {
+            const banner = document.getElementById('statusBanner');
+            const authBtn = document.getElementById('authBtn');
+            const inputArea = document.getElementById('memberInputArea');
+            const settingBtn = document.getElementById('settingBtn');
+
+            if (isAdminMode) {
+                banner.innerText = "🔓 현재 [관리자 편집 모드]입니다. 모든 변경사항은 실시간으로 저장됩니다.";
+                banner.className = "status-banner admin-mode";
+                authBtn.innerText = "🔒 관리자 모드 종료";
+                if(inputArea) inputArea.style.display = 'flex'; // 오타 교정 완료
+                if(settingBtn) settingBtn.style.display = 'inline-block';
+            } else {
+                banner.innerText = "👀 현재 [일반 조회 모드]입니다. 출석 내역 확인만 가능합니다.";
+                banner.className = "status-banner";
+                authBtn.innerText = "🔧 관리자 인증";
+                if(inputArea) inputArea.style.display = 'none';
+                if(settingBtn) settingBtn.style.display = 'none';
+            }
+
+            renderMembers();
+            renderCalendar();
+        }
+
         async function loadAllData() {
             try {
-                // 1. 멤버 명단 가져오기
+                // 클라우드 데이터를 먼저 읽어오되, 실패하거나 없을 경우 로컬 브라우저 백업본을 백업으로 활용
                 const { data: memberRow } = await supabaseClient.from('club_store').select('data').eq('name', 'members').single();
-                if (memberRow) members = memberRow.data;
+                if (memberRow) {
+                    members = memberRow.data;
+                } else {
+                    const localMem = localStorage.getItem('backup_members');
+                    if(localMem) members = JSON.parse(localMem);
+                }
 
-                // 2. 출석 체크 데이터 가져오기
                 const { data: attRow } = await supabaseClient.from('club_store').select('data').eq('name', 'attendance').single();
-                if (attRow) attendanceData = attRow.data;
+                if (attRow) {
+                    attendanceData = attRow.data;
+                } else {
+                    const localAtt = localStorage.getItem('backup_attendance');
+                    if(localAtt) attendanceData = JSON.parse(localAtt);
+                }
             } catch (e) {
-                console.error("데이터 동기화 실패:", e);
+                console.error("데이터 수신 오류:", e);
+                // 오프라인 상태일 때를 대비한 최소한의 로컬 데이터 로드 안전장치
+                const localMem = localStorage.getItem('backup_members');
+                const localAtt = localStorage.getItem('backup_attendance');
+                if(localMem) members = JSON.parse(localMem);
+                if(localAtt) attendanceData = JSON.parse(localAtt);
             }
         }
 
-        // 🚀 변경 사항을 클라우드 데이터베이스에 실시간으로 즉시 저장 및 업로드
+        // 🛠️ 안전장치 대폭 보완: 클라우드 전송 실패 시 에러 사유를 팝업으로 명확히 표출
         async function saveToCloud(recordName, payload) {
+            if (!isAdminMode) return;
             try {
-                await supabaseClient.from('club_store').update({ data: payload }).eq('name', recordName);
+                // 브라우저 내부 보관소에도 백업을 동시에 작성 (이중 안전장치)
+                localStorage.setItem('backup_' + recordName, JSON.stringify(payload));
+
+                const { error } = await supabaseClient.from('club_store').update({ data: payload }).eq('name', recordName);
+                if (error) {
+                    throw error; // 에러가 있으면 catch 구문으로 강제 이동
+                }
             } catch (e) {
                 console.error("클라우드 저장 실패:", e);
+                alert("⚠️ 수파베이스 데이터베이스 저장에 실패했습니다.\n\n[원인]: " + (e.message || e) + "\n\n(참고: 데이터는 브라우저에 임시로 자동 보존되었습니다.)");
             }
         }
 
-        /* ---------------- 기본월 설정 기능 (로컬 저장 유지) ---------------- */
         function initializeMonthSettings() {
             try {
                 let savedMode = localStorage.getItem('clubDefaultMonthMode') || 'auto';
@@ -268,9 +343,7 @@
                     const currentRealMonth = new Date().getMonth() + 1;
                     if (currentRealMonth >= 5 && currentRealMonth <= 12) {
                         currentSelectedMonth = currentRealMonth;
-                    } else {
-                        currentSelectedMonth = 5;
-                    }
+                    } else { currentSelectedMonth = 5; }
                 } else {
                     currentSelectedMonth = parseInt(savedFixedMonth);
                 }
@@ -280,6 +353,7 @@
         }
 
         function openSettingsModal() {
+            if (!isAdminMode) return;
             try {
                 let savedMode = localStorage.getItem('clubDefaultMonthMode') || 'auto';
                 let savedFixedMonth = localStorage.getItem('clubDefaultFixedMonth') || '5';
@@ -310,39 +384,37 @@
             closeModal('settingsModal');
         }
 
-        /* ---------------- 멤버 관리 기능 ---------------- */
         function renderMembers() {
             const listArea = document.getElementById('memberListArea');
             if(!listArea) return;
             listArea.innerHTML = '';
+            if(!Array.isArray(members)) { members = []; }
             
             members.forEach((member, index) => {
+                const actionButtons = isAdminMode ? `<div><button class="btn-edit" onclick="editMember(${index})">수정</button> | <button class="btn-delete" onclick="deleteMember(${index})">삭제</button></div>` : '';
                 listArea.innerHTML += `
                     <div class="member-tag">
                         <span>${member}</span>
-                        <div>
-                            <button class="btn-edit" onclick="editMember(${index})">수정</button> |
-                            <button class="btn-delete" onclick="deleteMember(${index})">삭제</button>
-                        </div>
+                        ${actionButtons}
                     </div>
                 `;
             });
         }
 
         async function addMember() {
+            if (!isAdminMode) return;
             const input = document.getElementById('newMemberName');
             const name = input.value.trim();
             if (name && !members.includes(name)) {
                 members.push(name);
                 renderMembers();
                 input.value = '';
-                await saveToCloud('members', members); // 클라우드 동기화
-            } else if (members.includes(name)) {
-                alert('이미 등록된 참여자입니다.');
+                await saveToCloud('members', members); 
             }
         }
 
         async function editMember(index) {
+            if (!isAdminMode) return;
             const oldName = members[index];
             const newName = prompt("수정할 이름을 입력하세요:", oldName);
             if (newName && newName.trim() !== "" && newName !== oldName) {
@@ -366,6 +438,7 @@
         }
 
         async function deleteMember(index) {
+            if (!isAdminMode) return;
             if(confirm(`'${members[index]}'님을 삭제하시겠습니까?`)) {
                 members.splice(index, 1);
                 renderMembers();
@@ -374,7 +447,6 @@
             }
         }
 
-        /* ---------------- 캘린더 및 대시보드 기능 ---------------- */
         function changeMonth() {
             currentSelectedMonth = parseInt(document.getElementById('monthSelector').value);
             updateDashboardTitles();
@@ -428,11 +500,23 @@
             } else {
                 members.forEach(member => {
                     const isChecked = todaysAttendance.includes(member) ? 'checked' : '';
+                    const isDisabled = !isAdminMode ? 'disabled' : '';
                     checkboxContainer.innerHTML += `
-                        <label><input type="checkbox" value="${member}" class="att-check" ${isChecked}> ${member}</label>
+                        <label><input type="checkbox" value="${member}" class="att-check" ${isChecked} ${isDisabled}> ${member}</label>
                     `;
                 });
             }
+
+            if (!isAdminMode) {
+                document.getElementById('photoUploadArea').style.display = 'none';
+                document.getElementById('modalSaveBtn').style.display = 'none';
+                document.getElementById('modalCancelBtn').innerText = '닫기';
+            } else {
+                document.getElementById('photoUploadArea').style.display = 'block';
+                document.getElementById('modalSaveBtn').style.display = 'inline-block';
+                document.getElementById('modalCancelBtn').innerText = '취소';
+            }
+
             document.getElementById('dayModal').style.display = 'flex';
         }
 
@@ -441,13 +525,14 @@
         }
 
         async function saveAttendance() {
+            if (!isAdminMode) return;
             const dateKey = `${currentSelectedMonth}-${currentSelectedDay}`;
             const presentMembers = Array.from(document.querySelectorAll('.att-check:checked')).map(cb => cb.value);
             attendanceData[dateKey] = presentMembers;
             
             renderCalendar(); 
             closeModal('dayModal');
-            await saveToCloud('attendance', attendanceData); // 클라우드 동기화
+            await saveToCloud('attendance', attendanceData); 
         }
 
         function updateDashboard() {
@@ -469,7 +554,7 @@
 
         function sharePage() {
             navigator.clipboard.writeText(window.location.href);
-            alert("📋 동아리 출석부 주소가 복사되었습니다!\n이 링크를 동아리원들에게 공유하면 누구나 접속해서 실시간으로 출석을 확인하고 편집할 수 있습니다.");
+            alert("📋 동아리 출석부 주소가 복사되었습니다!");
         }
     </script>
 </body>

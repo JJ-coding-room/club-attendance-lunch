@@ -15,6 +15,7 @@
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Malgun Gothic', sans-serif; }
         body { background-color: var(--light-bg); color: var(--text-main); }
         
+        /* 상단 상태 안내 배너 */
         .status-banner {
             background-color: #e8f0fe; color: var(--primary-blue);
             text-align: center; padding: 10px; font-weight: bold;
@@ -24,6 +25,7 @@
             background-color: #fff3e0; color: var(--admin-orange);
         }
 
+        /* 헤더 영역 */
         header {
             background-color: var(--primary-blue); color: white; padding: 20px;
             display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;
@@ -40,8 +42,10 @@
         }
         .reset-btn { background-color: #d32f2f; color: white; }
 
+        /* 메인 컨테이너 */
         .container { max-width: 1000px; margin: 20px auto; padding: 0 15px; }
 
+        /* 대시보드 영역 */
         .dashboard { display: flex; gap: 15px; margin-bottom: 20px; }
         .dash-card {
             flex: 1; background: white; padding: 20px;
@@ -51,6 +55,7 @@
         .dash-card h3 { font-size: 1rem; color: #666; margin-bottom: 10px; }
         .dash-card .number { font-size: 2rem; font-weight: bold; color: var(--primary-blue); }
 
+        /* 멤버 관리 영역 */
         .member-mgmt {
             background: white; padding: 15px; border-radius: 8px;
             margin-bottom: 20px; border: 1px solid var(--border-color);
@@ -59,6 +64,7 @@
         .member-input-area input { padding: 8px; border: 1px solid #ccc; flex: 1; min-width: 150px; }
         .member-input-area button { padding: 8px 15px; background: #333; color: white; border: none; cursor: pointer; border-radius: 4px;}
         
+        /* 멤버 리스트 */
         .member-list { display: flex; flex-wrap: wrap; gap: 10px; }
         .member-tag {
             background: var(--light-bg); border: 1px solid var(--border-color);
@@ -69,6 +75,7 @@
         .btn-edit { color: var(--primary-blue); }
         .btn-delete { color: #d32f2f; }
 
+        /* 캘린더 영역 */
         .calendar-section { background: white; padding: 20px; border-radius: 8px; border: 1px solid var(--border-color); }
         .calendar-header { display: flex; justify-content: space-between; margin-bottom: 15px; align-items: center; }
         .month-select { padding: 8px; font-size: 1.1rem; font-weight: bold; border-color: #ccc; border-radius: 4px;}
@@ -85,6 +92,7 @@
         .day-box .date { font-weight: bold; margin-bottom: 5px; }
         .day-box.active { border-left: 4px solid var(--primary-blue); background: white; }
         
+        /* 팝업 모달 */
         .modal-overlay {
             display: none; position: fixed; top: 0; left: 0;
             width: 100%; height: 100%; background: rgba(0,0,0,0.5);
@@ -98,6 +106,7 @@
         .checkbox-group { margin: 15px 0; max-height: 120px; overflow-y: auto; }
         .checkbox-group label { display: block; margin-bottom: 8px; cursor: pointer; }
         
+        /* 사진 디자인 영역 */
         .photo-upload { margin-bottom: 20px; background: #fafafa; padding: 12px; border-radius: 6px; border: 1px dashed var(--border-color); }
         .photo-upload label { display: block; margin-bottom: 5px; font-size: 0.9rem; }
         .modal-btns { display: flex; justify-content: flex-end; gap: 10px; margin-top:20px; }
@@ -126,13 +135,15 @@
     <header>
         <h1>주거복지학술 동아리 점심반 (12:00~13:00)</h1>
         <div class="header-btns">
-            <button class="header-btn reset-btn" onclick="clearCorruptedData()">데이터 초기화</button>
+            <!-- 💡 관리자 인증 시에만 보이도록 기본값을 숨김(display: none;)으로 설정 -->
+            <button class="header-btn reset-btn" id="resetDataBtn" style="display: none;" onclick="clearCorruptedData()">데이터 초기화</button>
             <button class="header-btn btn-admin-auth" id="authBtn" onclick="toggleAdminMode()">🔧 관리자 인증</button>
             <button class="header-btn" onclick="sharePage()">공유 주소 복사</button>
         </div>
     </header>
 
     <div class="container">
+        <!-- 상단 대시보드 -->
         <section class="dashboard">
             <div class="dash-card">
                 <h3 id="dashTitle1">이번 달 활동 횟수</h3>
@@ -144,6 +155,7 @@
             </div>
         </section>
 
+        <!-- 참여자 관리 -->
         <section class="member-mgmt">
             <div class="member-input-area" id="memberInputArea" style="display: none;">
                 <input type="text" id="newMemberName" placeholder="새로운 참여자 이름 입력" onkeypress="if(event.key==='Enter') addMember()">
@@ -152,6 +164,7 @@
             <div class="member-list" id="memberListArea">데이터 연동 중...</div>
         </section>
 
+        <!-- 캘린더 인터페이스 -->
         <section class="calendar-section">
             <div class="calendar-header">
                 <div>
@@ -172,9 +185,12 @@
         </section>
     </div>
 
+    <!-- 일별 정보 입력 팝업(모달) -->
     <div class="modal-overlay" id="dayModal">
         <div class="modal-content">
             <h2 id="modalDateTitle">0월 0일 활동 내용</h2>
+            
+            <!-- 사진 업로드 및 썸네일 노출 영역 -->
             <div class="photo-upload">
                 <label><strong>📸 활동 사진 (최대 2장)</strong></label>
                 <div id="adminPhotoInputWrap" style="display: none; margin-bottom: 10px;">
@@ -183,6 +199,7 @@
                 </div>
                 <div id="photoListArea" style="display: flex; flex-direction: column; gap: 6px;"></div>
             </div>
+
             <div><strong>참여자 체크</strong></div>
             <div class="checkbox-group" id="memberCheckboxes"></div>
             <div class="modal-btns">
@@ -192,10 +209,12 @@
         </div>
     </div>
 
+    <!-- 기본월 환경설정 팝업(모달) -->
     <div class="modal-overlay" id="settingsModal">
         <div class="modal-content">
             <h2>⚙️ 기본 시작월 설정</h2>
             <p style="font-size:0.9rem; color:#666; margin-bottom:15px;">웹페이지 첫 화면에 표시될 기준 달을 선택하세요.</p>
+            
             <div>
                 <label class="radio-option">
                     <input type="radio" name="defaultMode" value="auto" onchange="toggleFixedMonthSelect()"> 
@@ -211,6 +230,7 @@
                     <option value="11">11월</option><option value="12">12월</option>
                 </select>
             </div>
+
             <div class="modal-btns">
                 <button class="btn-close" onclick="closeModal('settingsModal')">취소</button>
                 <button class="btn-save" onclick="saveSettings()">설정 저장</button>
@@ -219,6 +239,7 @@
     </div>
 
     <script>
+        // ⚠️ [필수 입력] 수파베이스 주소와 키를 입력해주세요.
         const SUPABASE_URL = "https://ycfortizorakqflujpnh.supabase.co"; 
         const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InljZm9ydGl6b3Jha3FmbHVqcG5oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1MDM4OTIsImV4cCI6MjA5NjA3OTg5Mn0.ihQXYhqzkk5WBDtI2fMasSyMmliNm4I8hxp7aJJhkec";
         
@@ -235,18 +256,18 @@
         window.onload = async function() {
             try {
                 if(SUPABASE_URL.includes("여기에")) {
-                    alert("수파베이스 정보를 입력해 주세요.");
+                    alert("수파베이스 정보를 코드에 입력해 주세요.");
                     return;
                 }
                 supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
                 
-                // 🛠️ 마법의 리셋 기능 가동 장치
+                // 마법의 리셋 기능
                 const urlParams = new URLSearchParams(window.location.search);
                 if (urlParams.has('reset')) {
                     await supabaseClient.from('club_store').update({ data: ["홍길동", "김철수", "이영희"] }).eq('name', 'members');
                     await supabaseClient.from('club_store').update({ data: {} }).eq('name', 'attendance');
                     localStorage.clear();
-                    alert("🚨 [강제 초기화 성공] 서버의 꼬인 데이터가 완전히 청소되었습니다! 원래 주소로 이동합니다.");
+                    alert("🚨 [강제 초기화 성공] 서버 데이터가 청소되었습니다! 원래 주소로 이동합니다.");
                     window.location.href = window.location.origin + window.location.pathname;
                     return;
                 }
@@ -263,13 +284,13 @@
         function toggleAdminMode() {
             if (isAdminMode) {
                 isAdminMode = false;
-                alert("관리자 모드가 해제되었습니다.");
+                alert("관리자 모드가 해제되었습니다. [일반 조회 모드]로 전환합니다.");
                 applyModeUI();
             } else {
                 const password = prompt("동아리 관리자 비밀번호를 입력하세요:");
                 if (password === "3317") {
                     isAdminMode = true;
-                    alert("🔓 편집 모드가 활성화되었습니다.");
+                    alert("🔓 인증 성공! 관리자 [편집 모드]가 활성화되었습니다.");
                     applyModeUI();
                 } else if (password !== null) {
                     alert("❌ 비밀번호가 올바르지 않습니다.");
@@ -277,11 +298,13 @@
             }
         }
 
+        // 💡 핵심 변경: 관리자 모드 여부에 따라 '초기화 버튼'도 숨기고 나타나게 로직 추가
         function applyModeUI() {
             const banner = document.getElementById('statusBanner');
             const authBtn = document.getElementById('authBtn');
             const inputArea = document.getElementById('memberInputArea');
             const settingBtn = document.getElementById('settingBtn');
+            const resetBtn = document.getElementById('resetDataBtn'); // 💡 버튼 요소 가져오기
 
             if (isAdminMode) {
                 banner.innerText = "🔓 현재 [관리자 편집 모드]입니다. 모든 변경사항은 실시간으로 저장됩니다.";
@@ -289,12 +312,14 @@
                 authBtn.innerText = "🔒 관리자 모드 종료";
                 if(inputArea) inputArea.style.display = 'flex'; 
                 if(settingBtn) settingBtn.style.display = 'inline-block';
+                if(resetBtn) resetBtn.style.display = 'inline-block'; // 💡 관리자 모드일 때만 버튼 표시
             } else {
                 banner.innerText = "👀 현재 [일반 조회 모드]입니다. 출석 내역 확인만 가능합니다.";
                 banner.className = "status-banner";
                 authBtn.innerText = "🔧 관리자 인증";
                 if(inputArea) inputArea.style.display = 'none';
                 if(settingBtn) settingBtn.style.display = 'none';
+                if(resetBtn) resetBtn.style.display = 'none'; // 💡 일반 모드일 때는 버튼 완전 숨김
             }
 
             renderMembers();
@@ -309,7 +334,6 @@
                 const { data: attRow } = await supabaseClient.from('club_store').select('data').eq('name', 'attendance').single();
                 if (attRow) {
                     attendanceData = attRow.data;
-                    // 🛠️ 데이터 검증 심화 구조 보완
                     if (!attendanceData || typeof attendanceData !== 'object' || Array.isArray(attendanceData)) {
                         attendanceData = {};
                     }
@@ -375,7 +399,7 @@
                         const ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0, width, height);
 
-                        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.6); // 압축률을 60%로 더 조여 안전성 강화
+                        const compressedBase64 = canvas.toDataURL('image/jpeg', 0.6); 
 
                         tempUploadedPhotos.push({
                             name: file.name.split('.')[0] + '.jpg', 
